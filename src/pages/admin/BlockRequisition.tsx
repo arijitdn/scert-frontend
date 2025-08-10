@@ -11,14 +11,19 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect } from "react";
 import { DatabaseService } from "@/lib/database";
-import { RequisitionWithDetails, RequisitionStatus } from "@/types/database";
+import {
+  RequisitionWithDetails,
+  RequisitionStatus,
+  School,
+} from "@/types/database";
 
-const BLOCK_ID = "BLOCK_001"; // This should be replaced with actual block ID from authentication
+const block_code = "160101"; // Block code for the authenticated block admin
 
 export default function BlockRequisition() {
   const [requisitions, setRequisitions] = useState<RequisitionWithDetails[]>(
     [],
   );
+  const [schools, setSchools] = useState<School[]>([]);
   const [loading, setLoading] = useState(true);
   const [remarks, setRemarks] = useState<{ [key: string]: string }>({});
   const [updating, setUpdating] = useState<{ [key: string]: boolean }>({});
@@ -32,8 +37,15 @@ export default function BlockRequisition() {
     try {
       setLoading(true);
       const blockRequisitions =
-        await DatabaseService.getBlockRequisitions(BLOCK_ID);
+        await DatabaseService.getBlockRequisitions(block_code);
       setRequisitions(blockRequisitions);
+
+      // Get unique school IDs and fetch school information
+      const schoolIds = [
+        ...new Set(blockRequisitions.map((req) => req.schoolId)),
+      ];
+      const schoolData = await DatabaseService.getSchoolsByIds(schoolIds);
+      setSchools(schoolData);
 
       // Initialize remarks from existing data
       const initialRemarks: { [key: string]: string } = {};
@@ -50,15 +62,21 @@ export default function BlockRequisition() {
     }
   };
 
-  // Group requisitions by school
+  // Helper function to get school name by UDISE code
+  const getSchoolName = (schoolId: string) => {
+    const school = schools.find((s) => s.udise === schoolId);
+    return school?.name || `School UDISE: ${schoolId}`;
+  };
+
+  // Group requisitions by school ID (since school relationship is not available)
   const groupedRequisitions = requisitions.reduce(
     (acc, req) => {
-      const schoolName = req.school?.name || "Unknown School";
-      if (!acc[schoolName]) acc[schoolName] = [];
-      acc[schoolName].push(req);
+      const schoolId = req.schoolId || "Unknown School";
+      if (!acc[schoolId]) acc[schoolId] = [];
+      acc[schoolId].push(req);
       return acc;
     },
-    {} as { [schoolName: string]: RequisitionWithDetails[] },
+    {} as { [schoolId: string]: RequisitionWithDetails[] },
   );
 
   // Handle status update
@@ -139,14 +157,14 @@ export default function BlockRequisition() {
         </Card>
       ) : (
         Object.entries(groupedRequisitions).map(
-          ([schoolName, schoolRequisitions]) => (
+          ([schoolId, schoolRequisitions]) => (
             <Card
-              key={schoolName}
+              key={schoolId}
               className="w-full max-w-6xl mx-auto mb-6 bg-gradient-to-br from-blue-100 to-blue-50 border-blue-300"
             >
               <CardHeader>
                 <CardTitle className="text-lg text-blue-900">
-                  {schoolName}
+                  {getSchoolName(schoolId)}
                 </CardTitle>
                 <CardDescription>
                   {schoolRequisitions.length} requisition(s)

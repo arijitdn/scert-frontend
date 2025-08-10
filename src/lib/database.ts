@@ -528,8 +528,8 @@ export class DatabaseService {
       // First get all schools in the block
       const { data: schools, error: schoolError } = await supabase
         .from("School")
-        .select("id")
-        .eq("block_id", blockId);
+        .select("udise")
+        .eq("block_code", blockId);
 
       if (schoolError) {
         console.error("Error fetching schools in block:", schoolError);
@@ -540,7 +540,7 @@ export class DatabaseService {
         return [];
       }
 
-      const schoolIds = schools.map((school) => school.id);
+      const schoolIds = schools.map((school) => school.udise);
 
       const { data, error } = await supabase
         .from("Requisition")
@@ -573,8 +573,8 @@ export class DatabaseService {
       // First get all schools in the district
       const { data: schools, error: schoolError } = await supabase
         .from("School")
-        .select("id")
-        .eq("district_id", districtId);
+        .select("udise")
+        .eq("district_code", districtId);
 
       if (schoolError) {
         console.error("Error fetching schools in district:", schoolError);
@@ -585,7 +585,7 @@ export class DatabaseService {
         return [];
       }
 
-      const schoolIds = schools.map((school) => school.id);
+      const schoolIds = schools.map((school) => school.udise);
 
       const { data, error } = await supabase
         .from("Requisition")
@@ -694,6 +694,28 @@ export class DatabaseService {
       return data;
     } catch (error) {
       console.error("Error in updateRequisition:", error);
+      throw error;
+    }
+  }
+
+  // Get school information by UDISE codes
+  static async getSchoolsByIds(schoolIds: string[]): Promise<School[]> {
+    try {
+      if (!schoolIds.length) return [];
+
+      const { data, error } = await supabase
+        .from("School")
+        .select("*")
+        .in("udise", schoolIds);
+
+      if (error) {
+        console.error("Error fetching schools:", error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Error in getSchoolsByIds:", error);
       throw error;
     }
   }

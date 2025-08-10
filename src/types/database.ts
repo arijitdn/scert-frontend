@@ -29,12 +29,11 @@ export interface BacklogEntryWithBook extends BacklogEntry {
 export interface School {
   id: string;
   name: string;
-  udise_code: string;
-  block_id: string;
-  district_id: string;
+  udise: string;
+  block_code: string;
+  district_code: string;
   state_id: string;
   createdAt?: string;
-  updated_at?: string;
 }
 
 export interface Stock {
