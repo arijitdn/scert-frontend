@@ -7,7 +7,6 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -146,6 +145,7 @@ export default function SchoolReceived({ adminLevel }: { adminLevel: string }) {
       requisitionNo: `REQ-${String(newId).padStart(3, "0")}`,
       class: `Class ${Math.floor(Math.random() * 10) + 1}`,
       bookName: randomBookName,
+      category: "Textbook", // Added category property
       requisitioned: Math.floor(Math.random() * 100) + 50,
       received: 0,
     };
@@ -174,6 +174,7 @@ export default function SchoolReceived({ adminLevel }: { adminLevel: string }) {
       setStockEntryData({
         class: "",
         bookName: "",
+        category: "",
         requisitioned: 0,
         received: 0,
         left: 0,
@@ -234,6 +235,7 @@ export default function SchoolReceived({ adminLevel }: { adminLevel: string }) {
     setStockEntryData({
       class: "",
       bookName: "",
+      category: "",
       requisitioned: 0,
       received: 0,
       left: 0,
