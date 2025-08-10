@@ -321,6 +321,32 @@ export class DatabaseService {
     }
   }
 
+  // Get state stock with book details
+  static async getStateStock(): Promise<StockWithBook[]> {
+    try {
+      const { data, error } = await supabase
+        .from("Stock")
+        .select(
+          `
+          *,
+          book:Book(*)
+        `,
+        )
+        .eq("type", "STATE")
+        .order("book(class)", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching state stock:", error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Error in getStateStock:", error);
+      throw error;
+    }
+  }
+
   // Get school stock filtered by class
   static async getSchoolStockByClass(
     schoolId: string,
@@ -596,6 +622,8 @@ export class DatabaseService {
         `,
         )
         .in("schoolId", schoolIds)
+        .not("remarksByBlock", "is", null)
+        .neq("remarksByBlock", "")
         .order("createdAt", { ascending: false });
 
       if (error) {
@@ -694,6 +722,35 @@ export class DatabaseService {
       return data;
     } catch (error) {
       console.error("Error in updateRequisition:", error);
+      throw error;
+    }
+  }
+
+  // Update stock quantity (used when sending books from state to districts)
+  static async updateStockQuantity(
+    bookId: string,
+    type: ProfileType,
+    userId: string,
+    newQuantity: number,
+  ): Promise<Stock> {
+    try {
+      const { data, error } = await supabase
+        .from("Stock")
+        .update({ quantity: newQuantity })
+        .eq("bookId", bookId)
+        .eq("type", type)
+        .eq("userId", userId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error updating stock quantity:", error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Error in updateStockQuantity:", error);
       throw error;
     }
   }

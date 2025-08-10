@@ -85,6 +85,15 @@ export default function BlockRequisition() {
     newStatus: RequisitionStatus,
   ) => {
     try {
+      // Validate that remarks are provided when approving
+      if (
+        newStatus === "APPROVED" &&
+        (!remarks[requisitionId] || remarks[requisitionId].trim() === "")
+      ) {
+        alert("Please add remarks before approving the requisition.");
+        return;
+      }
+
       setUpdating((prev) => ({ ...prev, [requisitionId]: true }));
 
       const updates: Partial<any> = { status: newStatus };
@@ -233,14 +242,17 @@ export default function BlockRequisition() {
                       {/* Remarks Section */}
                       <div className="mb-4">
                         <label className="block text-sm font-medium mb-2">
-                          Block Remarks
+                          Block Remarks{" "}
+                          {req.status === "PENDING" && (
+                            <span className="text-red-500">*</span>
+                          )}
                         </label>
                         <Textarea
                           value={remarks[req.id] || ""}
                           onChange={(e) =>
                             handleRemarkChange(req.id, e.target.value)
                           }
-                          placeholder="Add remarks for this requisition..."
+                          placeholder="Add remarks for this requisition... (Required for approval)"
                           className="mb-2"
                           disabled={updating[req.id]}
                         />
@@ -292,28 +304,15 @@ export default function BlockRequisition() {
                         )}
 
                         {req.status === "APPROVED" && (
-                          <>
-                            <Button
-                              onClick={() =>
-                                handleStatusUpdate(req.id, "COMPLETED")
-                              }
-                              disabled={updating[req.id]}
-                              className="bg-blue-600 hover:bg-blue-700"
-                            >
-                              {updating[req.id]
-                                ? "Updating..."
-                                : "Mark as Delivered"}
-                            </Button>
-                            <Button
-                              onClick={() =>
-                                handleStatusUpdate(req.id, "REJECTED")
-                              }
-                              disabled={updating[req.id]}
-                              variant="destructive"
-                            >
-                              {updating[req.id] ? "Updating..." : "Reject"}
-                            </Button>
-                          </>
+                          <Button
+                            onClick={() =>
+                              handleStatusUpdate(req.id, "REJECTED")
+                            }
+                            disabled={updating[req.id]}
+                            variant="destructive"
+                          >
+                            {updating[req.id] ? "Updating..." : "Reject"}
+                          </Button>
                         )}
 
                         {req.status === "REJECTED" && (
