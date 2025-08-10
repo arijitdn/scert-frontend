@@ -17,6 +17,7 @@ import {
   BookCheck,
   AlertCircle,
   User,
+  School,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import supabase from "@/lib/supabase";
@@ -53,11 +54,17 @@ export default function StateLevelDashboard() {
       icon: BookOpen,
       change: "+12.5%",
     },
+    {
+      label: "Total Districts",
+      value: "8",
+      icon: Building2,
+      change: "+12.5%",
+    },
     { label: "Total IS", value: "100", icon: Users, change: "+0%" },
     {
       label: "Total Schools",
       value: schools.length.toLocaleString(),
-      icon: Users,
+      icon: School,
       change: "+2.1%",
     },
     {
