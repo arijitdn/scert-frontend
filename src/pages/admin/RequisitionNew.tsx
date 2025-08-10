@@ -13,7 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useState, useEffect } from "react";
-import { BookOpen, Send, Loader2, AlertCircle } from "lucide-react";
+import { BookOpen, Send, Loader2 } from "lucide-react";
 import { DatabaseService } from "@/lib/database";
 import {
   RequisitionWithDetails,
@@ -21,13 +21,6 @@ import {
   School,
   Book,
 } from "@/types/database";
-import {
-  getDistrictName,
-  getBlockName,
-  calculateFulfillmentPercent,
-  getStatusBadgeClass,
-  BOOK_MEDIUMS,
-} from "@/lib/constants";
 
 // Types for our combined data structures
 interface WorkOrderItem {
@@ -61,8 +54,8 @@ interface DistrictRequisitionData {
   }>;
 }
 
-// District mapping for Tripura - moved to constants
-const DISTRICT_MAP = {
+// District mapping for Tripura
+const DISTRICT_MAP: { [key: string]: string } = {
   "1601": "West Tripura",
   "1602": "South Tripura",
   "1603": "North Tripura",
@@ -75,15 +68,12 @@ const DISTRICT_MAP = {
 
 export default function Requisition() {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [workOrderItems, setWorkOrderItems] = useState<WorkOrderItem[]>([]);
   const [districtRequests, setDistrictRequests] = useState<
     DistrictRequisitionData[]
   >([]);
   const [batchInputs, setBatchInputs] = useState<{ [key: string]: string }>({});
   const [stateStock, setStateStock] = useState<StockWithBook[]>([]);
-  const [updating, setUpdating] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -92,7 +82,6 @@ export default function Requisition() {
   const loadData = async () => {
     try {
       setLoading(true);
-      setError(null);
 
       // Fetch all requisitions with book details
       const requisitions = await DatabaseService.getAllRequisitions();
@@ -139,7 +128,7 @@ export default function Requisition() {
             bookId,
             className: data.book.class,
             subject: data.book.subject,
-            medium: BOOK_MEDIUMS[0], // Default to first medium, could be made dynamic
+            medium: "English", // Default medium, can be made dynamic
             bookName: data.book.title,
             currentStock,
             totalRequisition: data.totalQuantity,
@@ -158,7 +147,8 @@ export default function Requisition() {
         const school = schools.find((s) => s.udise === req.schoolId);
         if (school && req.book) {
           const districtCode = school.district_code;
-          const districtName = getDistrictName(districtCode);
+          const districtName =
+            DISTRICT_MAP[districtCode] || `District ${districtCode}`;
 
           if (!districtData[districtCode]) {
             districtData[districtCode] = {
@@ -167,6 +157,7 @@ export default function Requisition() {
               schools: [],
             };
           }
+
           let schoolData = districtData[districtCode].schools.find(
             (s) => s.schoolId === school.udise,
           );
@@ -196,7 +187,6 @@ export default function Requisition() {
       setDistrictRequests(Object.values(districtData));
     } catch (error) {
       console.error("Error loading requisition data:", error);
-      setError("Failed to load requisition data. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -247,20 +237,17 @@ export default function Requisition() {
     if (toSend <= 0) return;
 
     try {
-      setUpdating(key);
-
       // Update the requisition in database
       const requisitions = await DatabaseService.getAllRequisitions();
       const reqToUpdate = requisitions.find((r) => r.reqId === request.reqId);
 
       if (reqToUpdate) {
-        const newReceived = reqToUpdate.received + toSend;
-        const newStatus =
-          newReceived >= reqToUpdate.quantity ? "COMPLETED" : "APPROVED";
-
         await DatabaseService.updateRequisition(reqToUpdate.id, {
-          received: newReceived,
-          status: newStatus,
+          received: reqToUpdate.received + toSend,
+          status:
+            reqToUpdate.received + toSend >= reqToUpdate.quantity
+              ? "COMPLETED"
+              : "APPROVED",
         });
 
         // Update state stock
@@ -281,18 +268,9 @@ export default function Requisition() {
 
         // Clear the input
         setBatchInputs((prev) => ({ ...prev, [key]: "" }));
-
-        // Show success message
-        setSuccessMessage(
-          `Successfully sent ${toSend} books to ${school.schoolName}`,
-        );
-        setTimeout(() => setSuccessMessage(null), 5000);
       }
     } catch (error) {
       console.error("Error sending batch:", error);
-      setError("Failed to send books. Please try again.");
-    } finally {
-      setUpdating(null);
     }
   };
 
@@ -344,29 +322,6 @@ export default function Requisition() {
     );
   }
 
-  if (error) {
-    return (
-      <AdminLayout
-        title="Requisition Management"
-        description="Approve and fulfill book requests from districts"
-        adminLevel="STATE ADMIN"
-      >
-        <div className="flex items-center justify-center h-64">
-          <div className="flex items-center space-x-2 text-red-600">
-            <AlertCircle className="h-6 w-6" />
-            <div>
-              <p className="font-semibold">Error Loading Data</p>
-              <p className="text-sm">{error}</p>
-              <Button variant="outline" onClick={loadData} className="mt-2">
-                Try Again
-              </Button>
-            </div>
-          </div>
-        </div>
-      </AdminLayout>
-    );
-  }
-
   return (
     <AdminLayout
       title="Requisition Management"
@@ -374,52 +329,6 @@ export default function Requisition() {
       adminLevel="STATE ADMIN"
     >
       <div className="max-w-6xl mx-auto space-y-10">
-        {/* Success Message */}
-        {successMessage && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg
-                  className="h-5 w-5 text-green-400"
-                  fill="currentColor"
-                  viewBox="0 0 20 20"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-green-700">{successMessage}</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <AlertCircle className="h-5 w-5 text-red-400" />
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-700">{error}</p>
-              </div>
-              <div className="ml-auto">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setError(null)}
-                >
-                  Dismiss
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
         <Card className="shadow-lg border-0">
           <CardHeader>
             <CardTitle className="text-xl text-blue-900">Work Order</CardTitle>
@@ -578,9 +487,8 @@ export default function Requisition() {
                             request.requested - request.received,
                             availableStock,
                           );
-                          const percent = calculateFulfillmentPercent(
-                            request.received,
-                            request.requested,
+                          const percent = Math.round(
+                            (request.received / request.requested) * 100,
                           );
                           const fulfilled =
                             request.received >= request.requested;
@@ -649,16 +557,10 @@ export default function Requisition() {
                                       }
                                       disabled={
                                         !batchInputs[key] ||
-                                        parseInt(batchInputs[key], 10) <= 0 ||
-                                        updating === key
+                                        parseInt(batchInputs[key], 10) <= 0
                                       }
                                     >
-                                      {updating === key ? (
-                                        <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                      ) : (
-                                        <Send className="h-4 w-4 mr-1" />
-                                      )}
-                                      {updating === key ? "Sending..." : "Send"}
+                                      <Send className="h-4 w-4 mr-1" /> Send
                                     </Button>
                                   </div>
                                 )}

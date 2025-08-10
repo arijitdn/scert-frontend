@@ -776,4 +776,124 @@ export class DatabaseService {
       throw error;
     }
   }
+
+  // Get all districts with their codes and names
+  static async getDistricts(): Promise<Array<{ code: string; name: string }>> {
+    try {
+      const { data, error } = await supabase
+        .from("School")
+        .select("district_code")
+        .not("district_code", "is", null);
+
+      if (error) {
+        console.error("Error fetching districts:", error);
+        throw error;
+      }
+
+      // Create a mapping of district codes to names (based on Tripura districts)
+      const districtMap: { [key: string]: string } = {
+        "1601": "West Tripura",
+        "1602": "South Tripura",
+        "1603": "North Tripura",
+        "1604": "Dhalai",
+        "1605": "Khowai",
+        "1606": "Gomati",
+        "1607": "Sepahijala",
+        "1608": "Unakoti",
+      };
+
+      const uniqueCodes = [
+        ...new Set(data?.map((item) => item.district_code) || []),
+      ];
+      return uniqueCodes.map((code) => ({
+        code,
+        name: districtMap[code] || `District ${code}`,
+      }));
+    } catch (error) {
+      console.error("Error in getDistricts:", error);
+      throw error;
+    }
+  }
+
+  // Get requisitions with aggregated data for work order
+  static async getRequisitionsForWorkOrder(): Promise<
+    Array<{
+      bookId: string;
+      book: Book;
+      totalQuantity: number;
+      totalReceived: number;
+      currentStock: number;
+    }>
+  > {
+    try {
+      // Get all requisitions
+      const requisitions = await this.getAllRequisitions();
+
+      // Get state stock
+      const stateStock = await this.getStateStock();
+
+      // Aggregate by book
+      const bookAggregates: {
+        [bookId: string]: {
+          book: Book;
+          totalQuantity: number;
+          totalReceived: number;
+        };
+      } = {};
+
+      requisitions.forEach((req) => {
+        if (req.book) {
+          const bookId = req.bookId;
+          if (!bookAggregates[bookId]) {
+            bookAggregates[bookId] = {
+              book: req.book,
+              totalQuantity: 0,
+              totalReceived: 0,
+            };
+          }
+          bookAggregates[bookId].totalQuantity += req.quantity;
+          bookAggregates[bookId].totalReceived += req.received;
+        }
+      });
+
+      // Combine with stock data
+      return Object.entries(bookAggregates).map(([bookId, data]) => {
+        const stockItem = stateStock.find((s) => s.bookId === bookId);
+        return {
+          bookId,
+          book: data.book,
+          totalQuantity: data.totalQuantity,
+          totalReceived: data.totalReceived,
+          currentStock: stockItem?.quantity || 0,
+        };
+      });
+    } catch (error) {
+      console.error("Error in getRequisitionsForWorkOrder:", error);
+      throw error;
+    }
+  }
+
+  // Update multiple requisitions in batch
+  static async updateRequisitionsBatch(
+    updates: Array<{
+      id: string;
+      updates: Partial<
+        Pick<
+          Requisition,
+          "status" | "remarksByBlock" | "remarksByDistrict" | "received"
+        >
+      >;
+    }>,
+  ): Promise<void> {
+    try {
+      const promises = updates.map(({ id, updates: reqUpdates }) =>
+        this.updateRequisition(id, reqUpdates),
+      );
+
+      await Promise.all(promises);
+    } catch (error) {
+      console.error("Error in updateRequisitionsBatch:", error);
+      throw error;
+    }
+  }
 }
