@@ -40,7 +40,8 @@ export interface School {
 export interface Stock {
   id: string;
   bookId: string;
-  schoolId: string;
+  type: ProfileType; // "DISTRICT" | "STATE" | "BLOCK" | "SCHOOL"
+  userId: string;
   quantity: number;
   createdAt?: string;
   updated_at?: string;

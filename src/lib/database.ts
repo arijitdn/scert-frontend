@@ -305,7 +305,8 @@ export class DatabaseService {
           book:Book(*)
         `,
         )
-        .eq("schoolId", schoolId)
+        .eq("type", "SCHOOL")
+        .eq("userId", schoolId)
         .order("book(class)", { ascending: true });
 
       if (error) {
@@ -334,7 +335,8 @@ export class DatabaseService {
           book:Book(*)
         `,
         )
-        .eq("schoolId", schoolId)
+        .eq("type", "SCHOOL")
+        .eq("userId", schoolId)
         .eq("book.class", className);
 
       if (error) {
