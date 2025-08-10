@@ -89,19 +89,46 @@ export class DatabaseService {
     }
   }
 
+  // Check if backlog entry exists for a book
+  static async getExistingBacklogEntry(
+    bookId: string,
+    type: ProfileType,
+    userId: string,
+  ): Promise<BacklogEntry | null> {
+    try {
+      const { data, error } = await supabase
+        .from("Stock")
+        .select("*")
+        .eq("bookId", bookId)
+        .eq("type", type)
+        .eq("userId", userId)
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        // PGRST116 is "not found" error
+        console.error("Error checking existing backlog entry:", error);
+        throw error;
+      }
+
+      return data || null;
+    } catch (error) {
+      console.error("Error in getExistingBacklogEntry:", error);
+      throw error;
+    }
+  }
+
   // Create backlog entry
   static async createBacklogEntry(
     entry: Omit<BacklogEntry, "id">,
   ): Promise<BacklogEntry> {
     try {
-      const profileType: ProfileType = "SCHOOL";
-
       const { data, error } = await supabase
         .from("Stock")
         .insert([
           {
             bookId: entry.bookId,
-            type: profileType,
+            type: entry.type,
+            userId: entry.userId,
             quantity: entry.quantity,
           },
         ])
@@ -121,19 +148,47 @@ export class DatabaseService {
     }
   }
 
+  // Create or update backlog entry (upsert)
+  static async createOrUpdateBacklogEntry(
+    entry: Omit<BacklogEntry, "id">,
+  ): Promise<BacklogEntry> {
+    try {
+      // Check if entry already exists
+      const existingEntry = await this.getExistingBacklogEntry(
+        entry.bookId,
+        entry.type,
+        entry.userId,
+      );
+
+      if (existingEntry) {
+        // Add to existing entry quantity
+        const updatedQuantity = existingEntry.quantity + entry.quantity;
+        return await this.updateBacklogEntry(existingEntry.id!, {
+          ...existingEntry,
+          quantity: updatedQuantity,
+        });
+      } else {
+        // Create new entry
+        return await this.createBacklogEntry(entry);
+      }
+    } catch (error) {
+      console.error("Error in createOrUpdateBacklogEntry:", error);
+      throw error;
+    }
+  }
+
   // Update backlog entry
   static async updateBacklogEntry(
     id: string,
     entry: Partial<BacklogEntry>,
   ): Promise<BacklogEntry> {
     try {
-      const profileType: ProfileType = "SCHOOL";
-
       const { data, error } = await supabase
         .from("Stock")
         .update({
           bookId: entry.bookId,
-          type: profileType,
+          type: entry.type,
+          userId: entry.userId,
           quantity: entry.quantity,
         })
         .eq("id", id)
@@ -168,9 +223,12 @@ export class DatabaseService {
   }
 
   // Get all backlog entries with book details
-  static async getBacklogEntries(): Promise<BacklogEntryWithBook[]> {
+  static async getBacklogEntries(
+    type?: ProfileType,
+    userId?: string,
+  ): Promise<BacklogEntryWithBook[]> {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("Stock")
         .select(
           `
@@ -178,8 +236,16 @@ export class DatabaseService {
           book:Book(*)
         `,
         )
-        .eq("type", "SCHOOL")
         .order("createdAt", { ascending: false });
+
+      if (type) {
+        query = query.eq("type", type);
+      }
+      if (userId) {
+        query = query.eq("userId", userId);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.error("Error fetching backlog entries:", error);
@@ -198,14 +264,13 @@ export class DatabaseService {
     entries: Omit<BacklogEntry, "id">[],
   ): Promise<BacklogEntry[]> {
     try {
-      const profileType: ProfileType = "SCHOOL";
-
       const { data, error } = await supabase
         .from("Stock")
         .insert(
           entries.map((entry) => ({
             bookId: entry.bookId,
-            type: profileType,
+            type: entry.type,
+            userId: entry.userId,
             quantity: entry.quantity,
           })),
         )

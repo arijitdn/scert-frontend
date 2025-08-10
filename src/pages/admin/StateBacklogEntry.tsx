@@ -20,7 +20,12 @@ import {
   X,
 } from "lucide-react";
 import { DatabaseService } from "@/lib/database";
-import { Book, BacklogEntryWithBook, ProfileType } from "@/types/database";
+import {
+  Book,
+  BacklogEntry,
+  BacklogEntryWithBook,
+  ProfileType,
+} from "@/types/database";
 
 interface RowData {
   id: string;
@@ -33,7 +38,7 @@ interface RowData {
   isNew: boolean;
 }
 
-export default function BlockBacklogEntry() {
+export default function StateBacklogEntry() {
   const [rows, setRows] = useState<RowData[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
@@ -89,7 +94,7 @@ export default function BlockBacklogEntry() {
           DatabaseService.getUniqueValues("class"),
           DatabaseService.getUniqueValues("subject"),
           DatabaseService.getUniqueValues("category"),
-          DatabaseService.getBacklogEntries("BLOCK", "160101"),
+          DatabaseService.getBacklogEntries("STATE", "state"),
         ]);
 
         setBooks(booksData);
@@ -123,7 +128,7 @@ export default function BlockBacklogEntry() {
     if (existingEntry) {
       const shouldContinue = window.confirm(
         `This book "${selectedBook?.title}" already exists in your backlog entries with quantity ${existingEntry.quantity}. ` +
-          `If you continue, the quantity will be updated with your new value. Do you want to continue?`,
+          `If you continue, your new quantity will be ADDED to the existing quantity. Do you want to continue?`,
       );
       if (!shouldContinue) {
         return;
@@ -155,8 +160,8 @@ export default function BlockBacklogEntry() {
       {
         id: newId,
         bookId: "",
-        type: "BLOCK",
-        userId: "160101",
+        type: "STATE",
+        userId: "state",
         quantity: "",
         isEditing: true,
         isNew: true,
@@ -199,8 +204,8 @@ export default function BlockBacklogEntry() {
 
         // Refresh saved entries
         const savedEntriesData = await DatabaseService.getBacklogEntries(
-          "BLOCK",
-          "160101",
+          "STATE",
+          "state",
         );
         setSavedEntries(savedEntriesData);
       } else {
@@ -218,8 +223,8 @@ export default function BlockBacklogEntry() {
 
         // Refresh saved entries
         const savedEntriesData = await DatabaseService.getBacklogEntries(
-          "BLOCK",
-          "160101",
+          "STATE",
+          "state",
         );
         setSavedEntries(savedEntriesData);
       }
@@ -244,8 +249,8 @@ export default function BlockBacklogEntry() {
 
           // Refresh saved entries
           const savedEntriesData = await DatabaseService.getBacklogEntries(
-            "BLOCK",
-            "160101",
+            "STATE",
+            "state",
           );
           setSavedEntries(savedEntriesData);
         }
@@ -313,8 +318,8 @@ export default function BlockBacklogEntry() {
 
       // Refresh saved entries
       const savedEntriesData = await DatabaseService.getBacklogEntries(
-        "BLOCK",
-        "160101",
+        "STATE",
+        "state",
       );
       setSavedEntries(savedEntriesData);
 
@@ -328,25 +333,13 @@ export default function BlockBacklogEntry() {
   };
 
   const handleEditSavedEntry = (entry: BacklogEntryWithBook) => {
-    // Find if this book is already being edited in current rows
-    const existingRow = rows.find(
-      (row) => row.bookId === entry.bookId && row.isEditing,
-    );
-
-    if (existingRow) {
-      alert(
-        `This book is already being edited in row ${rows.indexOf(existingRow) + 1}. Please save or cancel that edit first.`,
-      );
-      return;
-    }
-
-    // Add this entry as a new row for editing
+    // Add the saved entry to the editable rows
     const newRow: RowData = {
-      id: entry.id,
+      id: entry.id!,
       bookId: entry.bookId,
       book: entry.book,
-      type: "BLOCK" as ProfileType,
-      userId: "160101",
+      type: entry.type,
+      userId: entry.userId,
       quantity: entry.quantity.toString(),
       isEditing: true,
       isNew: false,
@@ -357,40 +350,41 @@ export default function BlockBacklogEntry() {
 
   const handleDeleteSavedEntry = async (entryId: string, bookTitle: string) => {
     if (
-      !confirm(
-        `Are you sure you want to delete the entry for "${bookTitle}"? This action cannot be undone.`,
+      window.confirm(
+        `Are you sure you want to delete the backlog entry for "${bookTitle}"? This action cannot be undone.`,
       )
     ) {
-      return;
-    }
+      setSaving(true);
+      try {
+        await DatabaseService.deleteBacklogEntry(entryId);
 
-    try {
-      await DatabaseService.deleteBacklogEntry(entryId);
+        // Refresh saved entries
+        const savedEntriesData = await DatabaseService.getBacklogEntries(
+          "STATE",
+          "state",
+        );
+        setSavedEntries(savedEntriesData);
 
-      // Refresh saved entries
-      const savedEntriesData = await DatabaseService.getBacklogEntries(
-        "BLOCK",
-        "160101",
-      );
-      setSavedEntries(savedEntriesData);
-
-      alert(`Entry for "${bookTitle}" deleted successfully!`);
-    } catch (error) {
-      console.error("Error deleting entry:", error);
-      alert("Error deleting entry. Please try again.");
+        alert("Backlog entry deleted successfully!");
+      } catch (error) {
+        console.error("Error deleting saved entry:", error);
+        alert("Error deleting backlog entry. Please try again.");
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
   return (
     <AdminLayout
-      title="Block Backlog Entry"
-      description="Enter class-wise backlog book details for your block"
-      adminLevel="BLOCK ADMIN"
+      title="State Backlog Entry"
+      description="Enter class-wise backlog book details for your state"
+      adminLevel="STATE ADMIN"
     >
       <Card className="w-full max-w-6xl mx-auto mt-8 shadow-xl rounded-2xl border-0">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Block Backlog Entry</CardTitle>
+            <CardTitle>State Backlog Entry</CardTitle>
             <Button
               variant="outline"
               onClick={() => setShowFilters(!showFilters)}
@@ -669,7 +663,7 @@ export default function BlockBacklogEntry() {
       {/* Saved Books Table */}
       <Card className="w-full max-w-6xl mx-auto mt-8 shadow-xl rounded-2xl border-0">
         <CardHeader>
-          <CardTitle>Saved Backlog Entries</CardTitle>
+          <CardTitle>Saved State Backlog Entries</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -703,7 +697,7 @@ export default function BlockBacklogEntry() {
                 {savedEntries.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="text-center py-8 text-gray-400">
-                      No saved backlog entries yet.
+                      No saved state backlog entries yet.
                     </td>
                   </tr>
                 ) : (
@@ -734,27 +728,31 @@ export default function BlockBacklogEntry() {
                           ? new Date(entry.createdAt).toLocaleDateString()
                           : "-"}
                       </td>
-                      <td className="px-4 py-2 border-b text-center space-x-2">
+                      <td className="px-4 py-2 border-b text-center whitespace-nowrap">
                         <Button
-                          variant="outline"
                           size="sm"
+                          variant="outline"
                           onClick={() => handleEditSavedEntry(entry)}
-                          className="h-8 px-3"
+                          className="mr-2 border-blue-600 text-blue-700 hover:bg-blue-50 px-3 py-1 rounded"
+                          title="Edit this entry"
+                          disabled={saving}
                         >
-                          Edit
+                          <Pencil className="w-4 h-4 mr-1" /> Edit
                         </Button>
                         <Button
-                          variant="destructive"
                           size="sm"
+                          variant="destructive"
                           onClick={() =>
                             handleDeleteSavedEntry(
-                              entry.id,
+                              entry.id!,
                               entry.book?.title || "Unknown Book",
                             )
                           }
-                          className="h-8 px-3"
+                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded shadow"
+                          title="Delete this entry"
+                          disabled={saving}
                         >
-                          Delete
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </td>
                     </tr>

@@ -7,7 +7,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   BookOpen,
   School,
@@ -23,7 +22,6 @@ import {
   User,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export default function BlockLevelDashboard() {
   const navigate = useNavigate();
@@ -203,7 +201,7 @@ export default function BlockLevelDashboard() {
           {
             label: "Backlog Entry",
             icon: Plus,
-            path: "/admin/backlog-entry",
+            path: "/admin/block/backlog-entry",
           },
           {
             label: "Received",

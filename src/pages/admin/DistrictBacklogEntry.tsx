@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,24 +20,20 @@ import {
   X,
 } from "lucide-react";
 import { DatabaseService } from "@/lib/database";
-import {
-  Book,
-  BacklogEntry,
-  BacklogEntryWithBook,
-  ProfileType,
-} from "@/types/database";
+import { Book, BacklogEntryWithBook, ProfileType } from "@/types/database";
 
 interface RowData {
   id: string;
   bookId: string;
   book?: Book;
   type: ProfileType;
+  userId: string;
   quantity: string;
   isEditing: boolean;
   isNew: boolean;
 }
 
-export default function BacklogEntryPage() {
+export default function DistrictBacklogEntry() {
   const [rows, setRows] = useState<RowData[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
@@ -93,7 +89,7 @@ export default function BacklogEntryPage() {
           DatabaseService.getUniqueValues("class"),
           DatabaseService.getUniqueValues("subject"),
           DatabaseService.getUniqueValues("category"),
-          DatabaseService.getBacklogEntries(),
+          DatabaseService.getBacklogEntries("DISTRICT", "1601"),
         ]);
 
         setBooks(booksData);
@@ -121,6 +117,30 @@ export default function BacklogEntryPage() {
 
   const handleBookSelect = (rowId: string, bookId: string) => {
     const selectedBook = books.find((book) => book.id === bookId);
+
+    // Check if this book is already selected in existing saved entries
+    const existingEntry = savedEntries.find((entry) => entry.bookId === bookId);
+    if (existingEntry) {
+      const shouldContinue = window.confirm(
+        `This book "${selectedBook?.title}" already exists in your backlog entries with quantity ${existingEntry.quantity}. ` +
+          `If you continue, your new quantity will be ADDED to the existing quantity. Do you want to continue?`,
+      );
+      if (!shouldContinue) {
+        return;
+      }
+    }
+
+    // Check if this book is already selected in current rows (excluding current row)
+    const duplicateRow = rows.find(
+      (row) => row.id !== rowId && row.bookId === bookId,
+    );
+    if (duplicateRow) {
+      alert(
+        `This book "${selectedBook?.title}" is already selected in another row. Please select a different book.`,
+      );
+      return;
+    }
+
     setRows((prev) =>
       prev.map((row) =>
         row.id === rowId ? { ...row, bookId, book: selectedBook } : row,
@@ -135,7 +155,8 @@ export default function BacklogEntryPage() {
       {
         id: newId,
         bookId: "",
-        type: "STATE",
+        type: "DISTRICT",
+        userId: "1601",
         quantity: "",
         isEditing: true,
         isNew: true,
@@ -159,10 +180,11 @@ export default function BacklogEntryPage() {
     setSaving(true);
     try {
       if (row.isNew) {
-        // Create new entry
-        const entry = await DatabaseService.createBacklogEntry({
+        // Create or update entry
+        const entry = await DatabaseService.createOrUpdateBacklogEntry({
           bookId: row.bookId,
           type: row.type,
+          userId: row.userId,
           quantity: parseInt(row.quantity),
         });
 
@@ -176,13 +198,17 @@ export default function BacklogEntryPage() {
         );
 
         // Refresh saved entries
-        const savedEntriesData = await DatabaseService.getBacklogEntries();
+        const savedEntriesData = await DatabaseService.getBacklogEntries(
+          "DISTRICT",
+          "1601",
+        );
         setSavedEntries(savedEntriesData);
       } else {
         // Update existing entry
         await DatabaseService.updateBacklogEntry(id, {
           bookId: row.bookId,
           type: row.type,
+          userId: row.userId,
           quantity: parseInt(row.quantity),
         });
 
@@ -191,7 +217,10 @@ export default function BacklogEntryPage() {
         );
 
         // Refresh saved entries
-        const savedEntriesData = await DatabaseService.getBacklogEntries();
+        const savedEntriesData = await DatabaseService.getBacklogEntries(
+          "DISTRICT",
+          "1601",
+        );
         setSavedEntries(savedEntriesData);
       }
     } catch (error) {
@@ -214,7 +243,10 @@ export default function BacklogEntryPage() {
           await DatabaseService.deleteBacklogEntry(id);
 
           // Refresh saved entries
-          const savedEntriesData = await DatabaseService.getBacklogEntries();
+          const savedEntriesData = await DatabaseService.getBacklogEntries(
+            "DISTRICT",
+            "1601",
+          );
           setSavedEntries(savedEntriesData);
         }
 
@@ -243,9 +275,10 @@ export default function BacklogEntryPage() {
     try {
       const promises = unsavedRows.map(async (row) => {
         if (row.isNew) {
-          const entry = await DatabaseService.createBacklogEntry({
+          const entry = await DatabaseService.createOrUpdateBacklogEntry({
             bookId: row.bookId,
             type: row.type,
+            userId: row.userId,
             quantity: parseInt(row.quantity),
           });
           return { oldId: row.id, newId: entry.id! };
@@ -253,6 +286,7 @@ export default function BacklogEntryPage() {
           await DatabaseService.updateBacklogEntry(row.id, {
             bookId: row.bookId,
             type: row.type,
+            userId: row.userId,
             quantity: parseInt(row.quantity),
           });
           return null;
@@ -278,7 +312,10 @@ export default function BacklogEntryPage() {
       );
 
       // Refresh saved entries
-      const savedEntriesData = await DatabaseService.getBacklogEntries();
+      const savedEntriesData = await DatabaseService.getBacklogEntries(
+        "DISTRICT",
+        "1601",
+      );
       setSavedEntries(savedEntriesData);
 
       alert("All changes saved successfully!");
@@ -290,11 +327,54 @@ export default function BacklogEntryPage() {
     }
   };
 
+  const handleEditSavedEntry = (entry: BacklogEntryWithBook) => {
+    // Add the saved entry to the editable rows
+    const newRow: RowData = {
+      id: entry.id!,
+      bookId: entry.bookId,
+      book: entry.book,
+      type: entry.type,
+      userId: entry.userId,
+      quantity: entry.quantity.toString(),
+      isEditing: true,
+      isNew: false,
+    };
+
+    setRows((prev) => [...prev, newRow]);
+  };
+
+  const handleDeleteSavedEntry = async (entryId: string, bookTitle: string) => {
+    if (
+      window.confirm(
+        `Are you sure you want to delete the backlog entry for "${bookTitle}"? This action cannot be undone.`,
+      )
+    ) {
+      setSaving(true);
+      try {
+        await DatabaseService.deleteBacklogEntry(entryId);
+
+        // Refresh saved entries
+        const savedEntriesData = await DatabaseService.getBacklogEntries(
+          "DISTRICT",
+          "1601",
+        );
+        setSavedEntries(savedEntriesData);
+
+        alert("Backlog entry deleted successfully!");
+      } catch (error) {
+        console.error("Error deleting saved entry:", error);
+        alert("Error deleting backlog entry. Please try again.");
+      } finally {
+        setSaving(false);
+      }
+    }
+  };
+
   return (
     <AdminLayout
-      title="Backlog Entry"
-      description="Enter class-wise backlog book details for your school"
-      adminLevel="SCHOOL ADMIN"
+      title="District Backlog Entry"
+      description="Enter class-wise backlog book details for your district"
+      adminLevel="DISTRICT ADMIN"
     >
       <Card className="w-full max-w-6xl mx-auto mt-8 shadow-xl rounded-2xl border-0">
         <CardHeader>
@@ -600,16 +680,19 @@ export default function BacklogEntryPage() {
                   <th className="px-4 py-3 border-b font-semibold text-sm text-left">
                     Backlog Quantity
                   </th>
-                  <th className="px-4 py-3 border-b font-semibold text-sm text-left rounded-tr-xl">
+                  <th className="px-4 py-3 border-b font-semibold text-sm text-left">
                     Date Added
+                  </th>
+                  <th className="px-4 py-3 border-b font-semibold text-sm text-center rounded-tr-xl">
+                    Actions
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {savedEntries.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center py-8 text-gray-400">
-                      No saved backlog entries yet.
+                    <td colSpan={7} className="text-center py-8 text-gray-400">
+                      No saved district backlog entries yet.
                     </td>
                   </tr>
                 ) : (
@@ -639,6 +722,29 @@ export default function BacklogEntryPage() {
                         {entry.createdAt
                           ? new Date(entry.createdAt).toLocaleDateString()
                           : "-"}
+                      </td>
+                      <td className="px-4 py-2 border-b text-center space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEditSavedEntry(entry)}
+                          className="h-8 px-3"
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() =>
+                            handleDeleteSavedEntry(
+                              entry.id,
+                              entry.book?.title || "Unknown Book",
+                            )
+                          }
+                          className="h-8 px-3"
+                        >
+                          Delete
+                        </Button>
                       </td>
                     </tr>
                   ))

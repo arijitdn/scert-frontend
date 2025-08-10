@@ -7,8 +7,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -227,7 +225,7 @@ export default function SchoolLevelDashboard() {
           {
             label: "Backlog Entry",
             icon: Plus,
-            path: "/admin/backlog-entry",
+            path: "/admin/school/backlog-entry",
           },
         ].map((action, idx) => {
           const Icon = action.icon;

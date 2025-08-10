@@ -16,6 +16,7 @@ export interface BacklogEntry {
   id?: string;
   bookId: string;
   type: ProfileType;
+  userId: string;
   quantity: number;
   createdAt?: string;
   updated_at?: string;

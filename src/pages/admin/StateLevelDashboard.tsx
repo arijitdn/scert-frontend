@@ -180,7 +180,7 @@ export default function StateLevelDashboard() {
           {
             label: "Backlog Entry",
             icon: Plus,
-            path: "/admin/backlog-entry",
+            path: "/admin/state/backlog-entry",
           },
           {
             label: "Requisition Window",

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,7 +20,12 @@ import {
   X,
 } from "lucide-react";
 import { DatabaseService } from "@/lib/database";
-import { Book, BacklogEntryWithBook, ProfileType } from "@/types/database";
+import {
+  Book,
+  BacklogEntry,
+  BacklogEntryWithBook,
+  ProfileType,
+} from "@/types/database";
 
 interface RowData {
   id: string;
@@ -33,7 +38,7 @@ interface RowData {
   isNew: boolean;
 }
 
-export default function BlockBacklogEntry() {
+export default function SchoolBacklogEntry() {
   const [rows, setRows] = useState<RowData[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
@@ -89,7 +94,7 @@ export default function BlockBacklogEntry() {
           DatabaseService.getUniqueValues("class"),
           DatabaseService.getUniqueValues("subject"),
           DatabaseService.getUniqueValues("category"),
-          DatabaseService.getBacklogEntries("BLOCK", "160101"),
+          DatabaseService.getBacklogEntries("SCHOOL", "16010100108"),
         ]);
 
         setBooks(booksData);
@@ -155,8 +160,8 @@ export default function BlockBacklogEntry() {
       {
         id: newId,
         bookId: "",
-        type: "BLOCK",
-        userId: "160101",
+        type: "SCHOOL",
+        userId: "16010100108",
         quantity: "",
         isEditing: true,
         isNew: true,
@@ -199,8 +204,8 @@ export default function BlockBacklogEntry() {
 
         // Refresh saved entries
         const savedEntriesData = await DatabaseService.getBacklogEntries(
-          "BLOCK",
-          "160101",
+          "SCHOOL",
+          "16010100108",
         );
         setSavedEntries(savedEntriesData);
       } else {
@@ -218,8 +223,8 @@ export default function BlockBacklogEntry() {
 
         // Refresh saved entries
         const savedEntriesData = await DatabaseService.getBacklogEntries(
-          "BLOCK",
-          "160101",
+          "SCHOOL",
+          "16010100108",
         );
         setSavedEntries(savedEntriesData);
       }
@@ -244,8 +249,8 @@ export default function BlockBacklogEntry() {
 
           // Refresh saved entries
           const savedEntriesData = await DatabaseService.getBacklogEntries(
-            "BLOCK",
-            "160101",
+            "SCHOOL",
+            "16010100108",
           );
           setSavedEntries(savedEntriesData);
         }
@@ -313,8 +318,8 @@ export default function BlockBacklogEntry() {
 
       // Refresh saved entries
       const savedEntriesData = await DatabaseService.getBacklogEntries(
-        "BLOCK",
-        "160101",
+        "SCHOOL",
+        "16010100108",
       );
       setSavedEntries(savedEntriesData);
 
@@ -345,8 +350,8 @@ export default function BlockBacklogEntry() {
       id: entry.id,
       bookId: entry.bookId,
       book: entry.book,
-      type: "BLOCK" as ProfileType,
-      userId: "160101",
+      type: "SCHOOL" as ProfileType,
+      userId: "16010100108",
       quantity: entry.quantity.toString(),
       isEditing: true,
       isNew: false,
@@ -369,8 +374,8 @@ export default function BlockBacklogEntry() {
 
       // Refresh saved entries
       const savedEntriesData = await DatabaseService.getBacklogEntries(
-        "BLOCK",
-        "160101",
+        "SCHOOL",
+        "16010100108",
       );
       setSavedEntries(savedEntriesData);
 
@@ -383,14 +388,14 @@ export default function BlockBacklogEntry() {
 
   return (
     <AdminLayout
-      title="Block Backlog Entry"
-      description="Enter class-wise backlog book details for your block"
-      adminLevel="BLOCK ADMIN"
+      title="School Backlog Entry"
+      description="Enter class-wise backlog book details for your school"
+      adminLevel="SCHOOL ADMIN"
     >
       <Card className="w-full max-w-6xl mx-auto mt-8 shadow-xl rounded-2xl border-0">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Block Backlog Entry</CardTitle>
+            <CardTitle>School Backlog Entry</CardTitle>
             <Button
               variant="outline"
               onClick={() => setShowFilters(!showFilters)}

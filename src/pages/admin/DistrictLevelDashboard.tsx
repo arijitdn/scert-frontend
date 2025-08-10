@@ -14,15 +14,12 @@ import {
   TrendingUp,
   Package,
   Plus,
-  Send,
-  Download,
   Users,
   AlertCircle,
   User,
   BookCheck, // Add BookCheck
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 
 export default function DistrictLevelDashboard() {
   const stats = [
@@ -211,7 +208,7 @@ export default function DistrictLevelDashboard() {
           {
             label: "Backlog Entry",
             icon: Plus,
-            path: "/admin/backlog-entry",
+            path: "/admin/district/backlog-entry",
           },
           {
             label: "e-Challan",
