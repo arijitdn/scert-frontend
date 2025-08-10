@@ -502,8 +502,7 @@ export class DatabaseService {
         .select(
           `
           *,
-          book:Book(*),
-          school:School(*)
+          book:Book(*)
         `,
         )
         .eq("schoolId", schoolId)
@@ -548,8 +547,7 @@ export class DatabaseService {
         .select(
           `
           *,
-          book:Book(*),
-          school:School(*)
+          book:Book(*)
         `,
         )
         .in("schoolId", schoolIds)
@@ -594,8 +592,7 @@ export class DatabaseService {
         .select(
           `
           *,
-          book:Book(*),
-          school:School(*)
+          book:Book(*)
         `,
         )
         .in("schoolId", schoolIds)
@@ -621,8 +618,7 @@ export class DatabaseService {
         .select(
           `
           *,
-          book:Book(*),
-          school:School(*)
+          book:Book(*)
         `,
         )
         .order("createdAt", { ascending: false });

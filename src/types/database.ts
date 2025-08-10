@@ -73,5 +73,5 @@ export interface Requisition {
 
 export interface RequisitionWithDetails extends Requisition {
   book?: Book;
-  school?: School;
+  // school relationship not available in database schema
 }
