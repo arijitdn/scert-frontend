@@ -4,6 +4,12 @@ import {
   BacklogEntry,
   BacklogEntryWithBook,
   ProfileType,
+  School,
+  Stock,
+  StockWithBook,
+  Requisition,
+  RequisitionWithDetails,
+  RequisitionStatus,
 } from "@/types/database";
 
 export class DatabaseService {
@@ -284,6 +290,412 @@ export class DatabaseService {
       return data || [];
     } catch (error) {
       console.error("Error in createBacklogEntries:", error);
+      throw error;
+    }
+  }
+
+  // Get school stock with book details
+  static async getSchoolStock(schoolId: string): Promise<StockWithBook[]> {
+    try {
+      const { data, error } = await supabase
+        .from("Stock")
+        .select(
+          `
+          *,
+          book:Book(*)
+        `,
+        )
+        .eq("schoolId", schoolId)
+        .order("book(class)", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching school stock:", error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Error in getSchoolStock:", error);
+      throw error;
+    }
+  }
+
+  // Get school stock filtered by class
+  static async getSchoolStockByClass(
+    schoolId: string,
+    className: string,
+  ): Promise<StockWithBook[]> {
+    try {
+      const { data, error } = await supabase
+        .from("Stock")
+        .select(
+          `
+          *,
+          book:Book(*)
+        `,
+        )
+        .eq("schoolId", schoolId)
+        .eq("book.class", className);
+
+      if (error) {
+        console.error("Error fetching school stock by class:", error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Error in getSchoolStockByClass:", error);
+      throw error;
+    }
+  }
+
+  // Get subjects by class from books
+  static async getSubjectsByClass(className: string): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from("Book")
+        .select("subject")
+        .eq("class", className)
+        .not("subject", "is", null);
+
+      if (error) {
+        console.error("Error fetching subjects by class:", error);
+        throw error;
+      }
+
+      const uniqueSubjects = [
+        ...new Set(data?.map((item) => item.subject) || []),
+      ];
+      return uniqueSubjects.sort();
+    } catch (error) {
+      console.error("Error in getSubjectsByClass:", error);
+      throw error;
+    }
+  }
+
+  // Get categories by class and subject
+  static async getCategoriesByClassAndSubject(
+    className: string,
+    subject: string,
+  ): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from("Book")
+        .select("category")
+        .eq("class", className)
+        .eq("subject", subject)
+        .not("category", "is", null);
+
+      if (error) {
+        console.error("Error fetching categories by class and subject:", error);
+        throw error;
+      }
+
+      const uniqueCategories = [
+        ...new Set(data?.map((item) => item.category) || []),
+      ];
+      return uniqueCategories.sort();
+    } catch (error) {
+      console.error("Error in getCategoriesByClassAndSubject:", error);
+      throw error;
+    }
+  }
+
+  // Get books by class, subject, and category
+  static async getBooksByFilters(
+    className: string,
+    subject: string,
+    category: string,
+  ): Promise<Book[]> {
+    try {
+      const { data, error } = await supabase
+        .from("Book")
+        .select("*")
+        .eq("class", className)
+        .eq("subject", subject)
+        .eq("category", category)
+        .order("title", { ascending: true });
+
+      if (error) {
+        console.error("Error fetching books by filters:", error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Error in getBooksByFilters:", error);
+      throw error;
+    }
+  }
+
+  // Generate next requisition ID
+  static async generateNextReqId(): Promise<string> {
+    try {
+      const { data, error } = await supabase
+        .from("Requisition")
+        .select("reqId")
+        .order("reqId", { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error("Error fetching last reqId:", error);
+        throw error;
+      }
+
+      if (!data || data.length === 0) {
+        return "REQ0001";
+      }
+
+      const lastReqId = data[0].reqId;
+      const lastNumber = parseInt(lastReqId.substring(3)); // Extract number from REQxxxx
+      const nextNumber = lastNumber + 1;
+      return `REQ${nextNumber.toString().padStart(4, "0")}`;
+    } catch (error) {
+      console.error("Error in generateNextReqId:", error);
+      throw error;
+    }
+  }
+
+  // Create new requisition
+  static async createRequisition(
+    requisition: Omit<Requisition, "id" | "reqId" | "createdAt" | "updated_at">,
+  ): Promise<Requisition> {
+    try {
+      const reqId = await this.generateNextReqId();
+
+      const { data, error } = await supabase
+        .from("Requisition")
+        .insert({
+          reqId: reqId,
+          bookId: requisition.bookId,
+          schoolId: requisition.schoolId,
+          quantity: requisition.quantity,
+          received: requisition.received || 0,
+          status: requisition.status || "PENDING",
+          remarksByBlock: requisition.remarksByBlock,
+          remarksByDistrict: requisition.remarksByDistrict,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error creating requisition:", error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Error in createRequisition:", error);
+      throw error;
+    }
+  }
+
+  // Get school requisitions with details
+  static async getSchoolRequisitions(
+    schoolId: string,
+  ): Promise<RequisitionWithDetails[]> {
+    try {
+      const { data, error } = await supabase
+        .from("Requisition")
+        .select(
+          `
+          *,
+          book:Book(*),
+          school:School(*)
+        `,
+        )
+        .eq("schoolId", schoolId)
+        .order("createdAt", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching school requisitions:", error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Error in getSchoolRequisitions:", error);
+      throw error;
+    }
+  }
+
+  // Get block requisitions (all schools in the block)
+  static async getBlockRequisitions(
+    blockId: string,
+  ): Promise<RequisitionWithDetails[]> {
+    try {
+      // First get all schools in the block
+      const { data: schools, error: schoolError } = await supabase
+        .from("School")
+        .select("id")
+        .eq("block_id", blockId);
+
+      if (schoolError) {
+        console.error("Error fetching schools in block:", schoolError);
+        throw schoolError;
+      }
+
+      if (!schools || schools.length === 0) {
+        return [];
+      }
+
+      const schoolIds = schools.map((school) => school.id);
+
+      const { data, error } = await supabase
+        .from("Requisition")
+        .select(
+          `
+          *,
+          book:Book(*),
+          school:School(*)
+        `,
+        )
+        .in("schoolId", schoolIds)
+        .order("createdAt", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching block requisitions:", error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Error in getBlockRequisitions:", error);
+      throw error;
+    }
+  }
+
+  // Get district requisitions (all schools in the district)
+  static async getDistrictRequisitions(
+    districtId: string,
+  ): Promise<RequisitionWithDetails[]> {
+    try {
+      // First get all schools in the district
+      const { data: schools, error: schoolError } = await supabase
+        .from("School")
+        .select("id")
+        .eq("district_id", districtId);
+
+      if (schoolError) {
+        console.error("Error fetching schools in district:", schoolError);
+        throw schoolError;
+      }
+
+      if (!schools || schools.length === 0) {
+        return [];
+      }
+
+      const schoolIds = schools.map((school) => school.id);
+
+      const { data, error } = await supabase
+        .from("Requisition")
+        .select(
+          `
+          *,
+          book:Book(*),
+          school:School(*)
+        `,
+        )
+        .in("schoolId", schoolIds)
+        .order("createdAt", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching district requisitions:", error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Error in getDistrictRequisitions:", error);
+      throw error;
+    }
+  }
+
+  // Get all requisitions (state-level view)
+  static async getAllRequisitions(): Promise<RequisitionWithDetails[]> {
+    try {
+      const { data, error } = await supabase
+        .from("Requisition")
+        .select(
+          `
+          *,
+          book:Book(*),
+          school:School(*)
+        `,
+        )
+        .order("createdAt", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching all requisitions:", error);
+        throw error;
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Error in getAllRequisitions:", error);
+      throw error;
+    }
+  }
+
+  // Get requisition statistics for dashboard
+  static async getRequisitionStats(): Promise<{
+    total: number;
+    pending: number;
+    approved: number;
+    completed: number;
+    rejected: number;
+  }> {
+    try {
+      const { data, error } = await supabase
+        .from("Requisition")
+        .select("status");
+
+      if (error) {
+        console.error("Error fetching requisition stats:", error);
+        throw error;
+      }
+
+      const stats = {
+        total: data?.length || 0,
+        pending: data?.filter((r) => r.status === "PENDING").length || 0,
+        approved: data?.filter((r) => r.status === "APPROVED").length || 0,
+        completed: data?.filter((r) => r.status === "COMPLETED").length || 0,
+        rejected: data?.filter((r) => r.status === "REJECTED").length || 0,
+      };
+
+      return stats;
+    } catch (error) {
+      console.error("Error in getRequisitionStats:", error);
+      throw error;
+    }
+  }
+
+  // Update requisition status and remarks
+  static async updateRequisition(
+    id: string,
+    updates: Partial<
+      Pick<
+        Requisition,
+        "status" | "remarksByBlock" | "remarksByDistrict" | "received"
+      >
+    >,
+  ): Promise<Requisition> {
+    try {
+      const { data, error } = await supabase
+        .from("Requisition")
+        .update(updates)
+        .eq("id", id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Error updating requisition:", error);
+        throw error;
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Error in updateRequisition:", error);
       throw error;
     }
   }

@@ -8,128 +8,255 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { DatabaseService } from "@/lib/database";
+import { StockWithBook, Book, RequisitionWithDetails } from "@/types/database";
 
-const classOptions = ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5"];
-const subjectOptions = [
-  "Mathematics",
-  "Science",
-  "English",
-  "Hindi",
-  "Social Studies",
-];
-
-const categoryOptions = ["Textbook", "Notebook", "Stationery", "Other"];
-// Dummy stock data per class
-const stockPerClass = {
-  "Class 1": [
-    { subject: "Mathematics", book: "Maths for Class 1", stock: 12 },
-    { subject: "English", book: "English Reader 1", stock: 10 },
-    { subject: "Hindi", book: "Hindi Basics 1", stock: 8 },
-  ],
-  "Class 2": [
-    { subject: "Mathematics", book: "Maths for Class 2", stock: 15 },
-    { subject: "English", book: "English Reader 2", stock: 11 },
-    { subject: "Hindi", book: "Hindi Basics 2", stock: 9 },
-  ],
-  "Class 3": [
-    { subject: "Mathematics", book: "Maths for Class 3", stock: 20 },
-    { subject: "Science", book: "Science Explorer", stock: 10 },
-    { subject: "English", book: "English Reader", stock: 15 },
-  ],
-  "Class 4": [
-    { subject: "Mathematics", book: "Maths for Class 4", stock: 18 },
-    { subject: "Science", book: "Science Explorer 4", stock: 12 },
-    { subject: "English", book: "English Reader 4", stock: 13 },
-  ],
-  "Class 5": [
-    { subject: "Mathematics", book: "Maths for Class 5", stock: 16 },
-    { subject: "Science", book: "Science Explorer 5", stock: 14 },
-    { subject: "English", book: "English Reader 5", stock: 12 },
-  ],
-};
-type RequisitionItem = {
-  book: string;
-  className: string;
-  subject: string;
-  quantity: number;
-};
-
-type PublishedRequisition = {
-  id: number;
-  requisitionNumber: string;
-  items: RequisitionItem[];
-  status: string;
-};
-
-const initialPublishedRequisitions: PublishedRequisition[] = [];
-
-// Add dummy data for students per class
-const studentsPerClass = {
-  "Class 1": 30,
-  "Class 2": 28,
-  "Class 3": 32,
-  "Class 4": 27,
-  "Class 5": 25,
-};
+const schoolId = "16010100108";
 
 export default function SchoolRequisition() {
-  const [currentRequisitions, setCurrentRequisitions] = useState<RequisitionItem[]>([]);
-  const [publishedRequisitions, setPublishedRequisitions] = useState<PublishedRequisition[]>(initialPublishedRequisitions);
-  const [selectedBook, setSelectedBook] = useState("");
+  // Step-wise selection states
+  const [classes, setClasses] = useState<string[]>([]);
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [books, setBooks] = useState<Book[]>([]);
+
+  // Selection states
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
+  const [selectedBook, setSelectedBook] = useState("");
   const [quantity, setQuantity] = useState("");
-  const [selectedStockClass, setSelectedStockClass] = useState(classOptions[0]);
 
-  // Find stock for selected book
-  const allBooks = Object.values(stockPerClass).flat();
-  const selectedBookStock = selectedBook
-    ? allBooks.find((b) => b.book === selectedBook)?.stock
-    : null;
-  // Get number of students in selected class
-  const selectedClassStudents = selectedClass
-    ? studentsPerClass[selectedClass]
-    : null;
+  // Data states
+  const [schoolStock, setSchoolStock] = useState<StockWithBook[]>([]);
+  const [currentRequisitions, setCurrentRequisitions] = useState<
+    Array<{
+      bookId: string;
+      bookName: string;
+      className: string;
+      subject: string;
+      category: string;
+      quantity: number;
+    }>
+  >([]);
+  const [pastRequisitions, setPastRequisitions] = useState<
+    RequisitionWithDetails[]
+  >([]);
+  const [selectedStockClass, setSelectedStockClass] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Loading states
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Load initial data
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    try {
+      setLoading(true);
+
+      // Load all classes
+      const allClasses = await DatabaseService.getUniqueValues("class");
+      setClasses(allClasses);
+
+      if (allClasses.length > 0) {
+        setSelectedStockClass(allClasses[0]);
+      }
+
+      // Load school stock
+      const stock = await DatabaseService.getSchoolStock(schoolId);
+      setSchoolStock(stock);
+
+      // Load past requisitions
+      const requisitions =
+        await DatabaseService.getSchoolRequisitions(schoolId);
+      setPastRequisitions(requisitions);
+    } catch (error) {
+      console.error("Error loading initial data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load subjects when class is selected
+  useEffect(() => {
+    if (selectedClass) {
+      loadSubjects();
+    } else {
+      setSubjects([]);
+      setSelectedSubject("");
+    }
+  }, [selectedClass]);
+
+  const loadSubjects = async () => {
+    try {
+      const classSubjects =
+        await DatabaseService.getSubjectsByClass(selectedClass);
+      setSubjects(classSubjects);
+      setSelectedSubject("");
+      setCategories([]);
+      setSelectedCategory("");
+      setBooks([]);
+      setSelectedBook("");
+    } catch (error) {
+      console.error("Error loading subjects:", error);
+    }
+  };
+
+  // Load categories when subject is selected
+  useEffect(() => {
+    if (selectedClass && selectedSubject) {
+      loadCategories();
+    } else {
+      setCategories([]);
+      setSelectedCategory("");
+    }
+  }, [selectedClass, selectedSubject]);
+
+  const loadCategories = async () => {
+    try {
+      const classSubjectCategories =
+        await DatabaseService.getCategoriesByClassAndSubject(
+          selectedClass,
+          selectedSubject,
+        );
+      setCategories(classSubjectCategories);
+      setSelectedCategory("");
+      setBooks([]);
+      setSelectedBook("");
+    } catch (error) {
+      console.error("Error loading categories:", error);
+    }
+  };
+
+  // Load books when category is selected
+  useEffect(() => {
+    if (selectedClass && selectedSubject && selectedCategory) {
+      loadBooks();
+    } else {
+      setBooks([]);
+      setSelectedBook("");
+    }
+  }, [selectedClass, selectedSubject, selectedCategory]);
+
+  const loadBooks = async () => {
+    try {
+      const filteredBooks = await DatabaseService.getBooksByFilters(
+        selectedClass,
+        selectedSubject,
+        selectedCategory,
+      );
+      setBooks(filteredBooks);
+      setSelectedBook("");
+    } catch (error) {
+      console.error("Error loading books:", error);
+    }
+  };
+
+  // Get current stock for selected book
+  const getBookStock = () => {
+    if (!selectedBook) return 0;
+    const stockItem = schoolStock.find(
+      (stock) => stock.bookId === selectedBook,
+    );
+    return stockItem?.quantity || 0;
+  };
+
+  // Add to current requisition
+  const handleAddRequisition = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBook || !selectedClass || !selectedSubject || !quantity)
-      return;
-    setCurrentRequisitions((prev) => [
-      ...prev,
-      {
-        book: selectedBook,
-        className: selectedClass,
-        subject: selectedSubject,
-        quantity: Number(quantity),
-      },
-    ]);
-    setSelectedBook("");
+
+    if (!selectedBook || !quantity) return;
+
+    const book = books.find((b) => b.id === selectedBook);
+    if (!book) return;
+
+    const newItem = {
+      bookId: selectedBook,
+      bookName: book.title,
+      className: selectedClass,
+      subject: selectedSubject,
+      category: selectedCategory,
+      quantity: parseInt(quantity),
+    };
+
+    setCurrentRequisitions((prev) => [...prev, newItem]);
+
+    // Reset form
     setSelectedClass("");
     setSelectedSubject("");
+    setSelectedCategory("");
+    setSelectedBook("");
     setQuantity("");
   };
 
-  const handlePublishAll = () => {
+  // Submit all current requisitions
+  const handleSubmitAll = async () => {
     if (currentRequisitions.length === 0) {
-      alert("No requisitions to publish.");
+      alert("No requisitions to submit.");
       return;
     }
-    const newRequisitionNumber = `REQ-${(publishedRequisitions.length + 1).toString().padStart(3, "0")}`;
-    setPublishedRequisitions((prev) => [
-      ...prev,
-      {
-        id: prev.length + 1,
-        requisitionNumber: newRequisitionNumber,
-        items: currentRequisitions,
-        status: "Pending",
-      },
-    ]);
-    setCurrentRequisitions([]);
-    alert(`Requisition ${newRequisitionNumber} published!`);
+
+    try {
+      setSubmitting(true);
+
+      // Create requisitions in database
+      for (const item of currentRequisitions) {
+        await DatabaseService.createRequisition({
+          bookId: item.bookId,
+          schoolId: schoolId,
+          quantity: item.quantity,
+          received: 0,
+          status: "PENDING",
+        });
+      }
+
+      // Reload past requisitions
+      const requisitions =
+        await DatabaseService.getSchoolRequisitions(schoolId);
+      setPastRequisitions(requisitions);
+
+      // Clear current requisitions
+      setCurrentRequisitions([]);
+
+      alert("Requisitions submitted successfully!");
+    } catch (error) {
+      console.error("Error submitting requisitions:", error);
+      alert("Error submitting requisitions. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
+
+  // Remove item from current requisitions
+  const removeCurrentRequisition = (index: number) => {
+    setCurrentRequisitions((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Filter stock by selected class
+  const getFilteredStock = () => {
+    if (!selectedStockClass) return schoolStock;
+    return schoolStock.filter(
+      (stock) => stock.book?.class === selectedStockClass,
+    );
+  };
+
+  if (loading) {
+    return (
+      <AdminLayout
+        title="Book Requisition"
+        description="Request new books for your school and track requisition status"
+        adminLevel="SCHOOL ADMIN"
+      >
+        <div className="flex justify-center items-center h-64">
+          <div>Loading...</div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout
@@ -137,9 +264,15 @@ export default function SchoolRequisition() {
       description="Request new books for your school and track requisition status"
       adminLevel="SCHOOL ADMIN"
     >
-      <Card className="w-full max-w-3xl mx-auto bg-gradient-to-br from-yellow-100 to-yellow-50 border-yellow-300 mb-8">
+      {/* Stock Display */}
+      <Card className="w-full max-w-6xl mx-auto bg-gradient-to-br from-yellow-100 to-yellow-50 border-yellow-300 mb-8">
         <CardHeader>
-          <CardTitle className="text-lg text-yellow-900">Stock</CardTitle>
+          <CardTitle className="text-lg text-yellow-900">
+            Current Stock
+          </CardTitle>
+          <CardDescription>
+            View available books in your school stock
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-4">
@@ -148,9 +281,10 @@ export default function SchoolRequisition() {
               value={selectedStockClass}
               onChange={(e) => setSelectedStockClass(e.target.value)}
             >
-              {classOptions.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
+              <option value="">All Classes</option>
+              {classes.map((cls) => (
+                <option key={cls} value={cls}>
+                  {cls}
                 </option>
               ))}
             </select>
@@ -159,120 +293,167 @@ export default function SchoolRequisition() {
             <table className="min-w-full border rounded-lg bg-white">
               <thead>
                 <tr className="bg-yellow-100">
+                  <th className="px-4 py-2 text-left">Class</th>
                   <th className="px-4 py-2 text-left">Subject</th>
+                  <th className="px-4 py-2 text-left">Category</th>
                   <th className="px-4 py-2 text-left">Book Name</th>
                   <th className="px-4 py-2 text-left">Stock</th>
                 </tr>
               </thead>
               <tbody>
-                {stockPerClass[selectedStockClass].map((row, idx) => (
-                  <tr key={row.book + idx} className="border-b">
-                    <td className="px-4 py-2">{row.subject}</td>
-                    <td className="px-4 py-2">{row.book}</td>
-                    <td className="px-4 py-2">{row.stock}</td>
+                {getFilteredStock().length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="text-center text-gray-500 py-8">
+                      No stock available
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  getFilteredStock().map((stock) => (
+                    <tr key={stock.id} className="border-b">
+                      <td className="px-4 py-2">{stock.book?.class}</td>
+                      <td className="px-4 py-2">{stock.book?.subject}</td>
+                      <td className="px-4 py-2">{stock.book?.category}</td>
+                      <td className="px-4 py-2">{stock.book?.title}</td>
+                      <td className="px-4 py-2">{stock.quantity}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
-      <Card className="w-full max-w-2xl mx-auto bg-gradient-to-br from-green-100 to-green-50 border-green-300 mb-8">
+
+      {/* Create New Requisition */}
+      <Card className="w-full max-w-4xl mx-auto bg-gradient-to-br from-green-100 to-green-50 border-green-300 mb-8">
         <CardHeader>
           <CardTitle className="text-lg text-green-900">
             Create New Requisition
           </CardTitle>
+          <CardDescription>
+            Select books step by step to create a requisition
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-            <div className="flex flex-col md:flex-row gap-4 flex-wrap items-center">
-              <select
-                className="border rounded px-3 py-2 bg-background"
-                value={selectedClass}
-                onChange={(e) => setSelectedClass(e.target.value)}
-                required
-              >
-                <option value="">Select Class</option>
-                {classOptions.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="border rounded px-3 py-2 bg-background"
-                value={selectedSubject}
-                onChange={(e) => setSelectedSubject(e.target.value)}
-                required
-              >
-                <option value="">Select Subject</option>
-                {subjectOptions.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="border rounded px-3 py-2 bg-background"
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                required
-              >
-                <option value="">Select Category</option>
-                {categoryOptions.map((opt) => (
-                  <option key={opt} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="border rounded px-3 py-2 bg-background"
-                value={selectedBook}
-                onChange={(e) => setSelectedBook(e.target.value)}
-                required
-              >
-                <option value="">Select Book Name</option>
-                {allBooks.map((b) => (
-                  <option key={b.book} value={b.book}>
-                    {b.book}
-                  </option>
-                ))}
-              </select>
+          <form className="flex flex-col gap-4" onSubmit={handleAddRequisition}>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Class Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Class</label>
+                <select
+                  className="w-full border rounded px-3 py-2 bg-background"
+                  value={selectedClass}
+                  onChange={(e) => setSelectedClass(e.target.value)}
+                  required
+                >
+                  <option value="">Select Class</option>
+                  {classes.map((cls) => (
+                    <option key={cls} value={cls}>
+                      {cls}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Subject Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Subject
+                </label>
+                <select
+                  className="w-full border rounded px-3 py-2 bg-background"
+                  value={selectedSubject}
+                  onChange={(e) => setSelectedSubject(e.target.value)}
+                  required
+                  disabled={!selectedClass}
+                >
+                  <option value="">Select Subject</option>
+                  {subjects.map((subject) => (
+                    <option key={subject} value={subject}>
+                      {subject}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Category Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-1">
+                  Category
+                </label>
+                <select
+                  className="w-full border rounded px-3 py-2 bg-background"
+                  value={selectedCategory}
+                  onChange={(e) => setSelectedCategory(e.target.value)}
+                  required
+                  disabled={!selectedSubject}
+                >
+                  <option value="">Select Category</option>
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Book Selection */}
+              <div>
+                <label className="block text-sm font-medium mb-1">Book</label>
+                <select
+                  className="w-full border rounded px-3 py-2 bg-background"
+                  value={selectedBook}
+                  onChange={(e) => setSelectedBook(e.target.value)}
+                  required
+                  disabled={!selectedCategory}
+                >
+                  <option value="">Select Book</option>
+                  {books.map((book) => (
+                    <option key={book.id} value={book.id}>
+                      {book.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            {/* Show number of students and stock available after selections */}
-            {selectedClass && (
-              <div className="flex gap-8 text-sm text-gray-700">
-                <div>
-                  Number of Students in {selectedClass}:{" "}
-                  <span className="font-semibold">{selectedClassStudents}</span>
-                </div>
-                {selectedBook && (
-                  <div>
-                    Stock Available:{" "}
-                    <span className="font-semibold">{selectedBookStock}</span>
-                  </div>
-                )}
+
+            {/* Show current stock for selected book */}
+            {selectedBook && (
+              <div className="text-sm text-gray-700 bg-blue-50 p-3 rounded">
+                <strong>Current Stock:</strong> {getBookStock()} books available
               </div>
             )}
-            <Input
-              type="number"
-              min={1}
-              placeholder="Number of books needed"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              className="max-w-xs"
-              required
-            />
-            <Button type="submit">Create Requisition</Button>
+
+            {/* Quantity Input */}
+            <div className="max-w-xs">
+              <label className="block text-sm font-medium mb-1">
+                Quantity Requested
+              </label>
+              <Input
+                type="number"
+                min={1}
+                placeholder="Number of books needed"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                required
+                disabled={!selectedBook}
+              />
+            </div>
+
+            <Button type="submit" disabled={!selectedBook} className="max-w-xs">
+              Add to Requisition
+            </Button>
           </form>
         </CardContent>
       </Card>
-      <Card className="w-full max-w-2xl mx-auto bg-gradient-to-br from-blue-100 to-blue-50 border-blue-300 mb-8">
+
+      {/* Current Requisitions */}
+      <Card className="w-full max-w-6xl mx-auto bg-gradient-to-br from-blue-100 to-blue-50 border-blue-300 mb-8">
         <CardHeader>
           <CardTitle className="text-lg text-blue-900">
             Current Requisition
           </CardTitle>
-          <CardDescription>Items added to the current requisition</CardDescription>
+          <CardDescription>Items to be submitted</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto mb-4">
@@ -281,79 +462,116 @@ export default function SchoolRequisition() {
                 <tr className="bg-blue-100">
                   <th className="px-4 py-2 text-left">Class</th>
                   <th className="px-4 py-2 text-left">Subject</th>
+                  <th className="px-4 py-2 text-left">Category</th>
                   <th className="px-4 py-2 text-left">Book Name</th>
                   <th className="px-4 py-2 text-left">Quantity</th>
+                  <th className="px-4 py-2 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {currentRequisitions.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="text-center text-gray-500 py-8">
-                      No items in current requisition.
+                    <td colSpan={6} className="text-center text-gray-500 py-8">
+                      No items in current requisition
                     </td>
                   </tr>
                 ) : (
-                  currentRequisitions.map((req, idx) => (
-                    <tr key={idx} className="border-b">
-                      <td className="px-4 py-2">{req.className}</td>
-                      <td className="px-4 py-2">{req.subject}</td>
-                      <td className="px-4 py-2">{req.book}</td>
-                      <td className="px-4 py-2">{req.quantity}</td>
+                  currentRequisitions.map((item, index) => (
+                    <tr key={index} className="border-b">
+                      <td className="px-4 py-2">{item.className}</td>
+                      <td className="px-4 py-2">{item.subject}</td>
+                      <td className="px-4 py-2">{item.category}</td>
+                      <td className="px-4 py-2">{item.bookName}</td>
+                      <td className="px-4 py-2">{item.quantity}</td>
+                      <td className="px-4 py-2">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => removeCurrentRequisition(index)}
+                        >
+                          Remove
+                        </Button>
+                      </td>
                     </tr>
                   ))
                 )}
               </tbody>
             </table>
           </div>
-          <Button onClick={handlePublishAll} className="w-full" disabled={currentRequisitions.length === 0}>
-            Publish All Current Requisitions
+          <Button
+            onClick={handleSubmitAll}
+            className="w-full"
+            disabled={currentRequisitions.length === 0 || submitting}
+          >
+            {submitting ? "Submitting..." : "Submit All Requisitions"}
           </Button>
         </CardContent>
       </Card>
 
-      
-    <Card className="w-full max-w-2xl mx-auto bg-gradient-to-br from-blue-100 to-blue-50 border-blue-300">
+      {/* Past Requisitions */}
+      <Card className="w-full max-w-6xl mx-auto bg-gradient-to-br from-purple-100 to-purple-50 border-purple-300">
         <CardHeader>
-          <CardTitle className="text-lg text-blue-900">
+          <CardTitle className="text-lg text-purple-900">
             Past Requisitions
           </CardTitle>
+          <CardDescription>
+            Track status of submitted requisitions
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="min-w-full border rounded-lg bg-white">
               <thead>
-                <tr className="bg-blue-100">
-                  <th className="px-4 py-2 text-left">Requisition No</th>
+                <tr className="bg-purple-100">
+                  <th className="px-4 py-2 text-left">Req ID</th>
+                  <th className="px-4 py-2 text-left">Book Name</th>
                   <th className="px-4 py-2 text-left">Class</th>
                   <th className="px-4 py-2 text-left">Subject</th>
-                  <th className="px-4 py-2 text-left">Book Name</th>
-                  <th className="px-4 py-2 text-left">Quantity</th>
+                  <th className="px-4 py-2 text-left">Requested</th>
+                  <th className="px-4 py-2 text-left">Received</th>
                   <th className="px-4 py-2 text-left">Status</th>
+                  <th className="px-4 py-2 text-left">Date</th>
                 </tr>
               </thead>
               <tbody>
-                {publishedRequisitions.length === 0 ? (
+                {pastRequisitions.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="text-center text-gray-500 py-8">
-                      No past requisitions found.
+                    <td colSpan={8} className="text-center text-gray-500 py-8">
+                      No past requisitions found
                     </td>
                   </tr>
                 ) : (
-                  publishedRequisitions.map((req) => (
-                    req.items.map((item, itemIdx) => (
-                      <tr key={`${req.id}-${itemIdx}`} className="border-b">
-                        {itemIdx === 0 && (
-                          <td rowSpan={req.items.length} className="px-4 py-2 align-top">{req.requisitionNumber}</td>
-                        )}
-                        <td className="px-4 py-2">{item.className}</td>
-                        <td className="px-4 py-2">{item.subject}</td>
-                        <td className="px-4 py-2">{item.book}</td>
-                        <td className="px-4 py-2">{item.quantity}</td>
-                        {itemIdx === 0 && (
-                          <td rowSpan={req.items.length} className="px-4 py-2 align-top">{req.status}</td>
-                        )}
-                      </tr>
-                    ))
+                  pastRequisitions.map((req) => (
+                    <tr key={req.id} className="border-b">
+                      <td className="px-4 py-2 font-mono text-sm">
+                        {req.reqId}
+                      </td>
+                      <td className="px-4 py-2">{req.book?.title}</td>
+                      <td className="px-4 py-2">{req.book?.class}</td>
+                      <td className="px-4 py-2">{req.book?.subject}</td>
+                      <td className="px-4 py-2">{req.quantity}</td>
+                      <td className="px-4 py-2">{req.received}</td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={`px-2 py-1 rounded text-sm ${
+                            req.status === "COMPLETED"
+                              ? "bg-green-100 text-green-800"
+                              : req.status === "APPROVED"
+                                ? "bg-blue-100 text-blue-800"
+                                : req.status === "REJECTED"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                          }`}
+                        >
+                          {req.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-sm">
+                        {req.createdAt
+                          ? new Date(req.createdAt).toLocaleDateString()
+                          : "N/A"}
+                      </td>
+                    </tr>
                   ))
                 )}
               </tbody>

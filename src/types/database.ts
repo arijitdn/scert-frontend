@@ -25,3 +25,52 @@ export interface BacklogEntry {
 export interface BacklogEntryWithBook extends BacklogEntry {
   book?: Book;
 }
+
+export interface School {
+  id: string;
+  name: string;
+  udise_code: string;
+  block_id: string;
+  district_id: string;
+  state_id: string;
+  createdAt?: string;
+  updated_at?: string;
+}
+
+export interface Stock {
+  id: string;
+  bookId: string;
+  schoolId: string;
+  quantity: number;
+  createdAt?: string;
+  updated_at?: string;
+}
+
+export interface StockWithBook extends Stock {
+  book?: Book;
+}
+
+export type RequisitionStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "COMPLETED"
+  | "REJECTED";
+
+export interface Requisition {
+  id: string;
+  reqId: string; // Format: REQ0001
+  bookId: string;
+  schoolId: string;
+  quantity: number;
+  received: number;
+  status: RequisitionStatus;
+  remarksByBlock?: string;
+  remarksByDistrict?: string;
+  createdAt?: string;
+  updated_at?: string;
+}
+
+export interface RequisitionWithDetails extends Requisition {
+  book?: Book;
+  school?: School;
+}

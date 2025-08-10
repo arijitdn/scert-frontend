@@ -8,154 +8,322 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
+import { Textarea } from "@/components/ui/textarea";
+import { useState, useEffect } from "react";
+import { DatabaseService } from "@/lib/database";
+import { RequisitionWithDetails, RequisitionStatus } from "@/types/database";
 
-const dummyRequisitions = [
-  {
-    id: 1,
-    school: "HENRY DEROZIO ACADEMY",
-    requisitionNumber: "REQ-001",
-    items: [
-      { book: "Maths for Class 3", className: "Class 3", subject: "Mathematics", quantity: 50, enrolled: 48, remark: "" },
-      { book: "English Reader", className: "Class 4", subject: "English", quantity: 30, enrolled: 42, remark: "" },
-    ],
-    status: "Pending",
-  },
-  {
-    id: 2,
-    school: "INDRANAGAR HIGH SCHOOL",
-    requisitionNumber: "REQ-002",
-    items: [
-      { book: "Hindi Basics", className: "Class 2", subject: "Hindi", quantity: 15, enrolled: 36, remark: "" },
-      { book: "Maths for Class 4", className: "Class 4", subject: "Mathematics", quantity: 25, enrolled: 40, remark: "" },
-    ],
-    status: "Approved",
-  },
-];
-
-function groupBySchool(requisitions) {
-  return requisitions.reduce((acc, req) => {
-    if (!acc[req.school]) acc[req.school] = [];
-    acc[req.school].push(req);
-    return acc;
-  }, {});
-}
+const BLOCK_ID = "BLOCK_001"; // This should be replaced with actual block ID from authentication
 
 export default function BlockRequisition() {
-  const [requisitions, setRequisitions] = useState(dummyRequisitions);
-  const [remarks, setRemarks] = useState({});
+  const [requisitions, setRequisitions] = useState<RequisitionWithDetails[]>(
+    [],
+  );
+  const [loading, setLoading] = useState(true);
+  const [remarks, setRemarks] = useState<{ [key: string]: string }>({});
+  const [updating, setUpdating] = useState<{ [key: string]: boolean }>({});
 
-  const handleRemarkChange = (reqId, itemIdx, value) => {
-    setRemarks((prev) => ({ ...prev, [`${reqId}-${itemIdx}`]: value }));
+  // Load block requisitions
+  useEffect(() => {
+    loadRequisitions();
+  }, []);
+
+  const loadRequisitions = async () => {
+    try {
+      setLoading(true);
+      const blockRequisitions =
+        await DatabaseService.getBlockRequisitions(BLOCK_ID);
+      setRequisitions(blockRequisitions);
+
+      // Initialize remarks from existing data
+      const initialRemarks: { [key: string]: string } = {};
+      blockRequisitions.forEach((req) => {
+        if (req.remarksByBlock) {
+          initialRemarks[req.id] = req.remarksByBlock;
+        }
+      });
+      setRemarks(initialRemarks);
+    } catch (error) {
+      console.error("Error loading requisitions:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAddRemark = (reqId, itemIdx) => {
-    setRequisitions((prev) =>
-      prev.map((req) =>
-        req.id === reqId
-          ? {
-              ...req,
-              items: req.items.map((item, idx) =>
-                idx === itemIdx ? { ...item, remark: remarks[`${reqId}-${itemIdx}`] || "" } : item
-              ),
-            }
-          : req
-      )
+  // Group requisitions by school
+  const groupedRequisitions = requisitions.reduce(
+    (acc, req) => {
+      const schoolName = req.school?.name || "Unknown School";
+      if (!acc[schoolName]) acc[schoolName] = [];
+      acc[schoolName].push(req);
+      return acc;
+    },
+    {} as { [schoolName: string]: RequisitionWithDetails[] },
+  );
+
+  // Handle status update
+  const handleStatusUpdate = async (
+    requisitionId: string,
+    newStatus: RequisitionStatus,
+  ) => {
+    try {
+      setUpdating((prev) => ({ ...prev, [requisitionId]: true }));
+
+      const updates: Partial<any> = { status: newStatus };
+      if (remarks[requisitionId]) {
+        updates.remarksByBlock = remarks[requisitionId];
+      }
+
+      await DatabaseService.updateRequisition(requisitionId, updates);
+
+      // Reload requisitions to get updated data
+      await loadRequisitions();
+    } catch (error) {
+      console.error("Error updating requisition:", error);
+      alert("Error updating requisition. Please try again.");
+    } finally {
+      setUpdating((prev) => ({ ...prev, [requisitionId]: false }));
+    }
+  };
+
+  // Handle remark change
+  const handleRemarkChange = (requisitionId: string, value: string) => {
+    setRemarks((prev) => ({ ...prev, [requisitionId]: value }));
+  };
+
+  // Save remark without changing status
+  const handleSaveRemark = async (requisitionId: string) => {
+    try {
+      setUpdating((prev) => ({ ...prev, [requisitionId]: true }));
+
+      await DatabaseService.updateRequisition(requisitionId, {
+        remarksByBlock: remarks[requisitionId] || "",
+      });
+
+      alert("Remark saved successfully!");
+    } catch (error) {
+      console.error("Error saving remark:", error);
+      alert("Error saving remark. Please try again.");
+    } finally {
+      setUpdating((prev) => ({ ...prev, [requisitionId]: false }));
+    }
+  };
+
+  if (loading) {
+    return (
+      <AdminLayout
+        title="Block Requisition Management"
+        description="Review and approve requisitions from schools in your block"
+        adminLevel="BLOCK ADMIN"
+      >
+        <div className="flex justify-center items-center h-64">
+          <div>Loading...</div>
+        </div>
+      </AdminLayout>
     );
-    setRemarks((prev) => ({ ...prev, [`${reqId}-${itemIdx}`]: "" }));
-  };
-
-  const grouped = groupBySchool(requisitions);
+  }
 
   return (
     <AdminLayout
-      title="School Requisitions"
-      description="View and remark on school book requisitions"
-      adminLevel={null}
+      title="Block Requisition Management"
+      description="Review and approve requisitions from schools in your block"
+      adminLevel="BLOCK ADMIN"
     >
-      <div className="max-w-5xl mx-auto space-y-10">
-        {Object.entries(grouped).map(([school, reqs]) => (
-          <Card key={school} className="shadow-lg border-0">
-            <CardHeader>
-              <CardTitle className="text-xl text-blue-900">{school}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full bg-white rounded-xl shadow border-separate border-spacing-0">
-                  <thead className="bg-gradient-to-r from-blue-100 to-blue-200 text-blue-900">
-                    <tr>
-                      <th className="px-4 py-2 border-b text-left">Requisition No</th>
-                      <th className="px-4 py-2 border-b text-left">Book Name</th>
-                      <th className="px-4 py-2 border-b text-left">Class</th>
-                      <th className="px-4 py-2 border-b text-left">Subject</th>
-                      <th className="px-4 py-2 border-b text-left">Enrolled</th>
-                      <th className="px-4 py-2 border-b text-left">
-                        Requested
-                      </th>
-                      <th className="px-4 py-2 border-b text-left">
-                        Action (Add Remarks)
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reqs.map((req) => (
-                      req.items.map((item, itemIdx) => (
-                        <tr
-                          key={`${req.id}-${itemIdx}`}
-                          className={
-                            itemIdx % 2 === 0
-                              ? "bg-white hover:bg-blue-50 transition"
-                              : "bg-blue-50 hover:bg-blue-100 transition"
-                          }
+      {Object.keys(groupedRequisitions).length === 0 ? (
+        <Card className="w-full max-w-4xl mx-auto">
+          <CardContent className="text-center py-8">
+            <p className="text-gray-500">
+              No requisitions found for your block.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        Object.entries(groupedRequisitions).map(
+          ([schoolName, schoolRequisitions]) => (
+            <Card
+              key={schoolName}
+              className="w-full max-w-6xl mx-auto mb-6 bg-gradient-to-br from-blue-100 to-blue-50 border-blue-300"
+            >
+              <CardHeader>
+                <CardTitle className="text-lg text-blue-900">
+                  {schoolName}
+                </CardTitle>
+                <CardDescription>
+                  {schoolRequisitions.length} requisition(s)
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {schoolRequisitions.map((req) => (
+                    <div
+                      key={req.id}
+                      className="border rounded-lg bg-white p-4"
+                    >
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <h4 className="font-semibold text-lg">
+                            Requisition {req.reqId}
+                          </h4>
+                          <p className="text-sm text-gray-600">
+                            Submitted:{" "}
+                            {req.createdAt
+                              ? new Date(req.createdAt).toLocaleDateString()
+                              : "N/A"}
+                          </p>
+                        </div>
+                        <span
+                          className={`px-3 py-1 rounded-full text-sm ${
+                            req.status === "COMPLETED"
+                              ? "bg-green-100 text-green-800"
+                              : req.status === "APPROVED"
+                                ? "bg-blue-100 text-blue-800"
+                                : req.status === "REJECTED"
+                                  ? "bg-red-100 text-red-800"
+                                  : "bg-yellow-100 text-yellow-800"
+                          }`}
                         >
-                          {itemIdx === 0 && (
-                            <td
-                              rowSpan={req.items.length}
-                              className="px-4 py-2 border-b align-top"
+                          {req.status}
+                        </span>
+                      </div>
+
+                      {/* Book Details */}
+                      <div className="bg-gray-50 p-3 rounded mb-4">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                          <div>
+                            <span className="font-medium">Book:</span>
+                            <br />
+                            {req.book?.title || "Unknown Book"}
+                          </div>
+                          <div>
+                            <span className="font-medium">Class:</span>
+                            <br />
+                            {req.book?.class || "N/A"}
+                          </div>
+                          <div>
+                            <span className="font-medium">Subject:</span>
+                            <br />
+                            {req.book?.subject || "N/A"}
+                          </div>
+                          <div>
+                            <span className="font-medium">Quantity:</span>
+                            <br />
+                            {req.quantity} books
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Remarks Section */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium mb-2">
+                          Block Remarks
+                        </label>
+                        <Textarea
+                          value={remarks[req.id] || ""}
+                          onChange={(e) =>
+                            handleRemarkChange(req.id, e.target.value)
+                          }
+                          placeholder="Add remarks for this requisition..."
+                          className="mb-2"
+                          disabled={updating[req.id]}
+                        />
+                        <Button
+                          onClick={() => handleSaveRemark(req.id)}
+                          variant="outline"
+                          size="sm"
+                          disabled={updating[req.id]}
+                        >
+                          Save Remark
+                        </Button>
+                      </div>
+
+                      {/* Show existing district remarks if any */}
+                      {req.remarksByDistrict && (
+                        <div className="mb-4 p-3 bg-purple-50 rounded">
+                          <span className="font-medium text-purple-800">
+                            District Remarks:
+                          </span>
+                          <p className="text-purple-700 mt-1">
+                            {req.remarksByDistrict}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 flex-wrap">
+                        {req.status === "PENDING" && (
+                          <>
+                            <Button
+                              onClick={() =>
+                                handleStatusUpdate(req.id, "APPROVED")
+                              }
+                              disabled={updating[req.id]}
+                              className="bg-green-600 hover:bg-green-700"
                             >
-                              {req.requisitionNumber}
-                            </td>
-                          )}
-                          <td className="px-4 py-2 border-b">{item.book}</td>
-                          <td className="px-4 py-2 border-b">{item.className}</td>
-                          <td className="px-4 py-2 border-b">{item.subject}</td>
-                          <td className="px-4 py-2 border-b">{item.enrolled}</td>
-                          <td className="px-4 py-2 border-b">{item.quantity}</td>
-                          <td className="px-4 py-2 border-b">
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                              <Input
-                                placeholder="Add remark"
-                                value={remarks[`${req.id}-${itemIdx}`] || ""}
-                                onChange={(e) =>
-                                  handleRemarkChange(req.id, itemIdx, e.target.value)
-                                }
-                                className="max-w-xs"
-                              />
-                              <Button
-                                size="sm"
-                                className="bg-blue-200 text-blue-900 hover:bg-blue-300"
-                                onClick={() => handleAddRemark(req.id, itemIdx)}
-                                disabled={!remarks[`${req.id}-${itemIdx}`]}
-                              >
-                                Add Remark
-                              </Button>
-                              {item.remark && (
-                                <span className="text-xs text-purple-700 font-semibold ml-2">
-                                  Remark: {item.remark}
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                              {updating[req.id] ? "Updating..." : "Approve"}
+                            </Button>
+                            <Button
+                              onClick={() =>
+                                handleStatusUpdate(req.id, "REJECTED")
+                              }
+                              disabled={updating[req.id]}
+                              variant="destructive"
+                            >
+                              {updating[req.id] ? "Updating..." : "Reject"}
+                            </Button>
+                          </>
+                        )}
+
+                        {req.status === "APPROVED" && (
+                          <>
+                            <Button
+                              onClick={() =>
+                                handleStatusUpdate(req.id, "COMPLETED")
+                              }
+                              disabled={updating[req.id]}
+                              className="bg-blue-600 hover:bg-blue-700"
+                            >
+                              {updating[req.id]
+                                ? "Updating..."
+                                : "Mark as Delivered"}
+                            </Button>
+                            <Button
+                              onClick={() =>
+                                handleStatusUpdate(req.id, "REJECTED")
+                              }
+                              disabled={updating[req.id]}
+                              variant="destructive"
+                            >
+                              {updating[req.id] ? "Updating..." : "Reject"}
+                            </Button>
+                          </>
+                        )}
+
+                        {req.status === "REJECTED" && (
+                          <Button
+                            onClick={() =>
+                              handleStatusUpdate(req.id, "APPROVED")
+                            }
+                            disabled={updating[req.id]}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            {updating[req.id] ? "Updating..." : "Re-approve"}
+                          </Button>
+                        )}
+
+                        {req.status === "COMPLETED" && (
+                          <span className="text-green-600 font-medium">
+                            ✓ Delivered
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ),
+        )
+      )}
     </AdminLayout>
   );
 }
