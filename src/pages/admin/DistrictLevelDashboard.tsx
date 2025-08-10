@@ -75,17 +75,83 @@ export default function DistrictLevelDashboard() {
   ];
 
   const blocks = [
-    { name: "Agartala Municipal Corporation", schools: 150, books: 0, pending: 0, totalRequisition: 1200 },
-    { name: "Dhukli", schools: 80, books: 0, pending: 0, totalRequisition: 850 },
-    { name: "Mohanpur", schools: 70, books: 0, pending: 0, totalRequisition: 700 },
-    { name: "Hezamara", schools: 60, books: 0, pending: 0, totalRequisition: 500 },
-    { name: "Mandai", schools: 50, books: 0, pending: 0, totalRequisition: 400 },
-    { name: "Jirania", schools: 90, books: 0, pending: 0, totalRequisition: 950 },
-    { name: "Lefunga", schools: 40, books: 0, pending: 0, totalRequisition: 300 },
-    { name: "Belbari", schools: 30, books: 0, pending: 0, totalRequisition: 250 },
-    { name: "Old Agartala", schools: 20, books: 0, pending: 0, totalRequisition: 180 },
-    { name: "Bamutia", schools: 10, books: 0, pending: 0, totalRequisition: 90 },
-    { name: "Mohanpur MC", schools: 25, books: 0, pending: 0, totalRequisition: 200 },
+    {
+      name: "Agartala Municipal Corporation",
+      schools: 150,
+      books: 0,
+      pending: 0,
+      totalRequisition: 1200,
+    },
+    {
+      name: "Dhukli",
+      schools: 80,
+      books: 0,
+      pending: 0,
+      totalRequisition: 850,
+    },
+    {
+      name: "Mohanpur",
+      schools: 70,
+      books: 0,
+      pending: 0,
+      totalRequisition: 700,
+    },
+    {
+      name: "Hezamara",
+      schools: 60,
+      books: 0,
+      pending: 0,
+      totalRequisition: 500,
+    },
+    {
+      name: "Mandai",
+      schools: 50,
+      books: 0,
+      pending: 0,
+      totalRequisition: 400,
+    },
+    {
+      name: "Jirania",
+      schools: 90,
+      books: 0,
+      pending: 0,
+      totalRequisition: 950,
+    },
+    {
+      name: "Lefunga",
+      schools: 40,
+      books: 0,
+      pending: 0,
+      totalRequisition: 300,
+    },
+    {
+      name: "Belbari",
+      schools: 30,
+      books: 0,
+      pending: 0,
+      totalRequisition: 250,
+    },
+    {
+      name: "Old Agartala",
+      schools: 20,
+      books: 0,
+      pending: 0,
+      totalRequisition: 180,
+    },
+    {
+      name: "Bamutia",
+      schools: 10,
+      books: 0,
+      pending: 0,
+      totalRequisition: 90,
+    },
+    {
+      name: "Mohanpur MC",
+      schools: 25,
+      books: 0,
+      pending: 0,
+      totalRequisition: 200,
+    },
   ];
 
   const navigate = useNavigate();
@@ -94,7 +160,6 @@ export default function DistrictLevelDashboard() {
     <AdminLayout
       title="District Level Dashboard (DEO)"
       description="Manage book distribution across all blocks in your district"
-      
     >
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -146,7 +211,7 @@ export default function DistrictLevelDashboard() {
           {
             label: "Backlog Entry",
             icon: Plus,
-            path: "/admin/school/backlog-entry",
+            path: "/admin/backlog-entry",
           },
           {
             label: "e-Challan",
@@ -202,7 +267,8 @@ export default function DistrictLevelDashboard() {
                     <div className="space-y-1">
                       <h4 className="font-medium">{block.name}</h4>
                       <p className="text-sm text-muted-foreground">
-                        {block.schools} schools | {block.totalRequisition} books requisitioned
+                        {block.schools} schools | {block.totalRequisition} books
+                        requisitioned
                       </p>
                     </div>
                     <div className="text-right space-y-2">
@@ -214,7 +280,15 @@ export default function DistrictLevelDashboard() {
                         <Badge variant="default">All up to date</Badge>
                       )}
                       <div>
-                        <Button size="sm" variant="outline" onClick={() => navigate(`/admin/schools?district=West Tripura&block=${block.name}`)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            navigate(
+                              `/admin/schools?district=West Tripura&block=${block.name}`,
+                            )
+                          }
+                        >
                           Manage
                         </Button>
                       </div>

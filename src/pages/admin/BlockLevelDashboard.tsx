@@ -35,7 +35,12 @@ export default function BlockLevelDashboard() {
       change: "+5.2%",
     },
     { label: "Schools Managed", value: "94", icon: School, change: "+2%" },
-    { label: "Active Requisition", value: "7", icon: AlertCircle, change: "-12%" },
+    {
+      label: "Active Requisition",
+      value: "7",
+      icon: AlertCircle,
+      change: "-12%",
+    },
     {
       label: "Distribution Rate",
       value: "88.7%",
@@ -198,7 +203,7 @@ export default function BlockLevelDashboard() {
           {
             label: "Backlog Entry",
             icon: Plus,
-            path: "/admin/school/backlog-entry",
+            path: "/admin/backlog-entry",
           },
           {
             label: "Received",
@@ -259,7 +264,13 @@ export default function BlockLevelDashboard() {
                         Updated {school.lastUpdate}
                       </p>
                       <div>
-                        <Button size="sm" variant="outline" onClick={() => navigate("/admin/block/school-details")}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            navigate("/admin/block/school-details")
+                          }
+                        >
                           View Details
                         </Button>
                       </div>

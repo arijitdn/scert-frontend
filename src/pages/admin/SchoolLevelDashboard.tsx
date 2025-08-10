@@ -33,29 +33,119 @@ import { useNavigate } from "react-router-dom";
 
 const allBooksData = {
   "Class 6": [
-    { subject: "Mathematics", total: 150, issued: 120, available: 30, percentage: 80 },
-    { subject: "Science", total: 150, issued: 110, available: 40, percentage: 73 },
-    { subject: "English", total: 150, issued: 130, available: 20, percentage: 87 },
+    {
+      subject: "Mathematics",
+      total: 150,
+      issued: 120,
+      available: 30,
+      percentage: 80,
+    },
+    {
+      subject: "Science",
+      total: 150,
+      issued: 110,
+      available: 40,
+      percentage: 73,
+    },
+    {
+      subject: "English",
+      total: 150,
+      issued: 130,
+      available: 20,
+      percentage: 87,
+    },
   ],
   "Class 7": [
-    { subject: "Mathematics", total: 145, issued: 100, available: 45, percentage: 69 },
-    { subject: "Science", total: 145, issued: 120, available: 25, percentage: 83 },
-    { subject: "Social Studies", total: 145, issued: 115, available: 30, percentage: 79 },
+    {
+      subject: "Mathematics",
+      total: 145,
+      issued: 100,
+      available: 45,
+      percentage: 69,
+    },
+    {
+      subject: "Science",
+      total: 145,
+      issued: 120,
+      available: 25,
+      percentage: 83,
+    },
+    {
+      subject: "Social Studies",
+      total: 145,
+      issued: 115,
+      available: 30,
+      percentage: 79,
+    },
   ],
   "Class 8": [
-    { subject: "Mathematics", total: 155, issued: 130, available: 25, percentage: 84 },
-    { subject: "Science", total: 155, issued: 140, available: 15, percentage: 90 },
-    { subject: "Hindi", total: 155, issued: 125, available: 30, percentage: 81 },
+    {
+      subject: "Mathematics",
+      total: 155,
+      issued: 130,
+      available: 25,
+      percentage: 84,
+    },
+    {
+      subject: "Science",
+      total: 155,
+      issued: 140,
+      available: 15,
+      percentage: 90,
+    },
+    {
+      subject: "Hindi",
+      total: 155,
+      issued: 125,
+      available: 30,
+      percentage: 81,
+    },
   ],
   "Class 9": [
-    { subject: "Mathematics", total: 200, issued: 180, available: 20, percentage: 90 },
-    { subject: "Science", total: 200, issued: 170, available: 30, percentage: 85 },
-    { subject: "English", total: 200, issued: 190, available: 10, percentage: 95 },
+    {
+      subject: "Mathematics",
+      total: 200,
+      issued: 180,
+      available: 20,
+      percentage: 90,
+    },
+    {
+      subject: "Science",
+      total: 200,
+      issued: 170,
+      available: 30,
+      percentage: 85,
+    },
+    {
+      subject: "English",
+      total: 200,
+      issued: 190,
+      available: 10,
+      percentage: 95,
+    },
   ],
   "Class 10": [
-    { subject: "Mathematics", total: 200, issued: 190, available: 10, percentage: 95 },
-    { subject: "Science", total: 200, issued: 185, available: 15, percentage: 93 },
-    { subject: "Computer Science", total: 200, issued: 195, available: 5, percentage: 98 },
+    {
+      subject: "Mathematics",
+      total: 200,
+      issued: 190,
+      available: 10,
+      percentage: 95,
+    },
+    {
+      subject: "Science",
+      total: 200,
+      issued: 185,
+      available: 15,
+      percentage: 93,
+    },
+    {
+      subject: "Computer Science",
+      total: 200,
+      issued: 195,
+      available: 5,
+      percentage: 98,
+    },
   ],
 };
 
@@ -68,7 +158,12 @@ export default function SchoolLevelDashboard() {
     { label: "Students Enrolled", value: "340", icon: Users, change: "+3%" },
     { label: "Books Issued", value: "2,156", icon: BookCheck, change: "+15%" },
     { label: "Low Stock Items", value: "12", icon: Package, change: "+25%" },
-    { label: "Total Book Requisition", value: "5,000", icon: BookOpen, change: "+10%" },
+    {
+      label: "Total Book Requisition",
+      value: "5,000",
+      icon: BookOpen,
+      change: "+10%",
+    },
   ];
 
   const navigate = useNavigate();
@@ -127,12 +222,12 @@ export default function SchoolLevelDashboard() {
             path: "/admin/school/notifications-create",
           },
           { label: "Received", icon: Package, path: "/admin/school/received" },
-          
+
           { label: "Issues", icon: AlertCircle, path: "/admin/school/issues" },
           {
             label: "Backlog Entry",
             icon: Plus,
-            path: "/admin/school/backlog-entry",
+            path: "/admin/backlog-entry",
           },
         ].map((action, idx) => {
           const Icon = action.icon;

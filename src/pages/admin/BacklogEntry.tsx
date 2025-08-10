@@ -37,7 +37,7 @@ interface RowData {
   isNew: boolean;
 }
 
-export default function SchoolBacklogEntry() {
+export default function BacklogEntryPage() {
   const [rows, setRows] = useState<RowData[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);

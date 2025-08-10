@@ -36,7 +36,6 @@ import BlockIssues from "./pages/admin/BlockIssues";
 import DistrictIssues from "./pages/admin/DistrictIssues";
 import SchoolNotificationsCreate from "./pages/admin/SchoolNotificationsCreate";
 import SchoolProfile from "./pages/admin/SchoolProfile";
-import SchoolBacklogEntry from "./pages/admin/SchoolBacklogEntry";
 import BlockProfile from "./pages/admin/BlockProfile";
 import BlockSchoolDetails from "./pages/admin/BlockSchoolDetails";
 import RequisitionWindow from "./pages/admin/RequisitionWindow";
@@ -54,6 +53,7 @@ import PrivateSchoolIssues from "./pages/admin/PrivateSchoolIssues";
 import PrivateSchoolNotifications from "./pages/admin/PrivateSchoolNotifications";
 import CreatePrivateSchool from "./pages/admin/CreatePrivateSchool";
 import PrivateSchoolApproval from "./pages/admin/PrivateSchoolApproval";
+import BacklogEntryPage from "./pages/admin/BacklogEntry";
 
 const queryClient = new QueryClient();
 
@@ -117,10 +117,7 @@ const App = () => (
           />
           <Route path="/admin/school/issues" element={<Issues />} />
           <Route path="/admin/school/profile" element={<SchoolProfile />} />
-          <Route
-            path="/admin/school/backlog-entry"
-            element={<SchoolBacklogEntry />}
-          />
+          <Route path="/admin/backlog-entry" element={<BacklogEntryPage />} />
           <Route
             path="/admin/block/login-credentials"
             element={<BlockLoginCredentials />}
