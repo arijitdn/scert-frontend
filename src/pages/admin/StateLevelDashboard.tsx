@@ -7,34 +7,59 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   BookOpen,
   Building2,
   TrendingUp,
   Users,
   Plus,
-  Search,
-  Filter,
   Package,
   BookCheck,
   AlertCircle,
   User,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import supabase from "@/lib/supabase";
+import { useEffect, useState } from "react";
 
 export default function StateLevelDashboard() {
+  const [books, setBooks] = useState([]);
+  const [schools, setSchools] = useState([]);
+
+  const fetchData = async () => {
+    // Fetch Books
+    const { data: booksData, error } = await supabase.from("Book").select("*");
+    if (error) {
+      console.error("Error fetching books:", error);
+    } else {
+      setBooks(booksData);
+    }
+
+    // Fetch Schools
+    const { data: schoolsData, error: schoolsError } = await supabase
+      .from("School")
+      .select("*");
+    if (schoolsError) {
+      console.error("Error fetching schools:", schoolsError);
+    } else {
+      setSchools(schoolsData);
+    }
+  };
+
   const stats = [
     {
       label: "Total Books",
-      value: "2,847,563",
+      value: books.length.toLocaleString(),
       icon: BookOpen,
       change: "+12.5%",
     },
-    { label: "Districts", value: "8", icon: Building2, change: "0%" },
     { label: "Total IS", value: "100", icon: Users, change: "+0%" },
-    { label: "Total Schools", value: "3,500", icon: Users, change: "+2.1%" },
+    {
+      label: "Total Schools",
+      value: schools.length.toLocaleString(),
+      icon: Users,
+      change: "+2.1%",
+    },
     {
       label: "Distribution Rate",
       value: "94.2%",
@@ -43,43 +68,68 @@ export default function StateLevelDashboard() {
     },
   ];
 
-  const recentActivities = [
+  const districts = [
     {
-      action: "Book allocation approved",
-      district: "Mumbai District",
-      time: "2 hours ago",
-      status: "approved",
+      name: "Dhalai",
+      schools: 500,
+      books: 200000,
+      utilization: 90,
+      totalRequisition: 150000,
     },
     {
-      action: "New shipment received",
-      district: "Pune District",
-      time: "4 hours ago",
-      status: "received",
+      name: "Gomati",
+      schools: 450,
+      books: 180000,
+      utilization: 88,
+      totalRequisition: 130000,
     },
     {
-      action: "Inventory request pending",
-      district: "Nashik District",
-      time: "6 hours ago",
-      status: "pending",
+      name: "Khowai",
+      schools: 300,
+      books: 120000,
+      utilization: 92,
+      totalRequisition: 90000,
     },
     {
-      action: "Distribution completed",
-      district: "Nagpur District",
-      time: "1 day ago",
-      status: "completed",
+      name: "North Tripura",
+      schools: 550,
+      books: 220000,
+      utilization: 85,
+      totalRequisition: 180000,
+    },
+    {
+      name: "Sepahijala",
+      schools: 400,
+      books: 160000,
+      utilization: 93,
+      totalRequisition: 140000,
+    },
+    {
+      name: "South Tripura",
+      schools: 600,
+      books: 240000,
+      utilization: 89,
+      totalRequisition: 200000,
+    },
+    {
+      name: "Unakoti",
+      schools: 250,
+      books: 100000,
+      utilization: 95,
+      totalRequisition: 80000,
+    },
+    {
+      name: "West Tripura",
+      schools: 700,
+      books: 280000,
+      utilization: 91,
+      totalRequisition: 230000,
     },
   ];
 
-  const districts = [
-    { name: "Dhalai", schools: 500, books: 200000, utilization: 90, totalRequisition: 150000 },
-    { name: "Gomati", schools: 450, books: 180000, utilization: 88, totalRequisition: 130000 },
-    { name: "Khowai", schools: 300, books: 120000, utilization: 92, totalRequisition: 90000 },
-    { name: "North Tripura", schools: 550, books: 220000, utilization: 85, totalRequisition: 180000 },
-    { name: "Sepahijala", schools: 400, books: 160000, utilization: 93, totalRequisition: 140000 },
-    { name: "South Tripura", schools: 600, books: 240000, utilization: 89, totalRequisition: 200000 },
-    { name: "Unakoti", schools: 250, books: 100000, utilization: 95, totalRequisition: 80000 },
-    { name: "West Tripura", schools: 700, books: 280000, utilization: 91, totalRequisition: 230000 },
-  ];
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const navigate = useNavigate();
 
@@ -87,7 +137,6 @@ export default function StateLevelDashboard() {
     <AdminLayout
       title="State Level Dashboard"
       description="Manage book inventory across all districts in the state"
-      
     >
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -122,9 +171,14 @@ export default function StateLevelDashboard() {
             path: "/admin/state/register-books",
           },
           {
-            label: "Edit Profile",
-            icon: User,
-            path: "/admin/state/create-profile",
+            label: "Backlog Entry",
+            icon: Plus,
+            path: "/admin/school/backlog-entry",
+          },
+          {
+            label: "Requisition Window",
+            icon: Package,
+            path: "/admin/state/requisition-window",
           },
           {
             label: "Requisition",
@@ -141,31 +195,26 @@ export default function StateLevelDashboard() {
             icon: BookCheck,
             path: "/admin/state/state-echallan",
           },
-          { label: "Issues", icon: AlertCircle, path: "/admin/state/issues" },
-          {
-            label: "Notification",
-            icon: Users,
-            path: "/admin/state/notifications",
-          },
-          {
-            label: "Backlog Entry",
-            icon: Plus,
-            path: "/admin/school/backlog-entry",
-          },
-          {
-            label: "Requisition Window",
-            icon: Package,
-            path: "/admin/state/requisition-window",
-          },
           {
             label: "Reports",
             icon: BookCheck,
             path: "/admin/state/reports",
           },
           {
+            label: "Notification",
+            icon: Users,
+            path: "/admin/state/notifications",
+          },
+          { label: "Issues", icon: AlertCircle, path: "/admin/state/issues" },
+          {
             label: "Private School Approval",
             icon: BookCheck,
             path: "/admin/state/private-school-approval",
+          },
+          {
+            label: "Edit Profile",
+            icon: User,
+            path: "/admin/state/create-profile",
           },
         ].map((action, idx) => {
           const Icon = action.icon;
@@ -206,12 +255,21 @@ export default function StateLevelDashboard() {
                     <div className="space-y-1">
                       <h4 className="font-medium">{district.name}</h4>
                       <p className="text-sm text-muted-foreground">
-                        {district.schools} government schools | {district.totalRequisition} books requisitioned
+                        {district.schools} government schools |{" "}
+                        {district.totalRequisition} books requisitioned
                       </p>
                     </div>
                     <div className="text-right space-y-2">
                       <div>
-                        <Button size="sm" variant="outline" onClick={() => navigate(`/admin/state/district-details/${district.name}`)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            navigate(
+                              `/admin/state/district-details/${district.name}`,
+                            )
+                          }
+                        >
                           Manage
                         </Button>
                       </div>

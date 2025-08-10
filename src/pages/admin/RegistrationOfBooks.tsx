@@ -1,21 +1,9 @@
 import AdminLayout from "@/components/AdminLayout";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useState } from "react";
-import {
-  BookOpen,
-  TrendingDown,
-  DollarSign,
-  PlusCircle,
-  Trash2,
-  Edit2,
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { Trash2, Edit2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -24,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import supabase from "@/lib/supabase";
 
 const ayOptions = ["2022-23", "2023-24", "2024-25"];
 const classOptions = ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5"];
@@ -35,80 +24,63 @@ const subjectOptions = [
   "Social Studies",
 ];
 
-const dummyBooks = [
-  {
-    ay: "2023-24",
-    className: "Class 3",
-    subject: "Mathematics",
-    category: "Core",
-    title: "Maths for Class 3",
-    currentRate: "130",
-  },
-  {
-    ay: "2023-24",
-    className: "Class 4",
-    subject: "Science",
-    category: "Core",
-    title: "Science Explorer",
-    currentRate: "135",
-  },
-  {
-    ay: "2022-23",
-    className: "Class 5",
-    subject: "English",
-    category: "Language",
-    title: "English Reader",
-    currentRate: "120",
-  },
-];
-
 const initialFormData = {
-  ay: "",
-  className: "",
+  title: "",
+  class: "",
   subject: "",
   category: "",
-  title: "",
-  currentRate: "",
+  rate: "",
+  academic_year: "",
 };
 
 export default function RegistrationOfBooks() {
-  const [books, setBooks] = useState(dummyBooks);
+  const [books, setBooks] = useState([]);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("All");
   const [filterValue, setFilterValue] = useState("");
   const [editIndex, setEditIndex] = useState(-1);
   const [formData, setFormData] = useState(initialFormData);
 
-  // Stats calculations
-  const booksLastYear = books.filter((b) => b.fy === "2023-24").length;
-  
-  const avgPrice = books.length
-    ? (
-        books.reduce((sum, b) => sum + Number(b.currentRate), 0) / books.length
-      ).toFixed(2)
-    : 0;
-  const recentBook = books[books.length - 1];
+  async function fetchData() {
+    const { data: booksData, error } = await supabase.from("Book").select("*");
+    if (error) {
+      console.error("Error fetching books:", error);
+    } else {
+      setBooks(booksData);
+    }
+  }
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    fetchData();
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editIndex !== -1) {
-      // Edit mode
-      const updatedBooks = [...books];
-      updatedBooks[editIndex] = { ...formData };
-      setBooks(updatedBooks);
-      setEditIndex(-1);
-    } else {
-      setBooks([
-        ...books,
-        { ...formData },
-      ]);
+
+    // Validate form data
+    if (
+      !formData.academic_year ||
+      !formData.class ||
+      !formData.subject ||
+      !formData.category ||
+      !formData.title ||
+      !formData.rate
+    ) {
+      alert("Please fill all fields");
+      return;
     }
-    setFormData(initialFormData); // Reset form
+
+    await supabase.from("Book").upsert({
+      ...formData,
+      rate: Number(formData.rate),
+    });
+
+    // Reset form
+    setFormData(initialFormData);
+
+    fetchData();
   };
 
   const handleDelete = (idx: number) => {
@@ -135,14 +107,16 @@ export default function RegistrationOfBooks() {
     );
   }
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   return (
     <AdminLayout
       title="Register Book"
       description="Add a new book to the state inventory"
       adminLevel="STATE ADMIN"
     >
-      
-
       <div className="flex flex-col items-center min-h-[60vh]">
         <Card className="w-full max-w-xl shadow-lg bg-gradient-to-br from-purple-100 to-purple-50 border-purple-300">
           <CardHeader>
@@ -153,11 +127,13 @@ export default function RegistrationOfBooks() {
           <CardContent>
             <form className="space-y-6" onSubmit={handleSubmit}>
               <div className="grid grid-cols-2 gap-4 items-center">
-                <label className="font-medium text-purple-900">AY (academic year)</label>
+                <label className="font-medium text-purple-900">
+                  AY (academic year)
+                </label>
                 <select
                   className="border rounded px-3 py-2 bg-background"
-                  name="ay"
-                  value={formData.ay}
+                  name="academic_year"
+                  value={formData.academic_year}
                   onChange={handleChange}
                   required
                 >
@@ -172,8 +148,8 @@ export default function RegistrationOfBooks() {
                 <label className="font-medium text-purple-900">Class</label>
                 <select
                   className="border rounded px-3 py-2 bg-background"
-                  name="className"
-                  value={formData.className}
+                  name="class"
+                  value={formData.class}
                   onChange={handleChange}
                   required
                 >
@@ -223,15 +199,13 @@ export default function RegistrationOfBooks() {
                 </label>
                 <Input
                   type="number"
-                  name="currentRate"
-                  value={formData.currentRate}
+                  name="rate"
+                  value={formData.rate}
                   onChange={handleChange}
                   placeholder="Enter current rate"
                   required
                   className="border-purple-300"
                 />
-
-                
               </div>
               <div className="flex justify-center pt-4">
                 <Button
@@ -297,7 +271,7 @@ export default function RegistrationOfBooks() {
                 <TableHead className="py-2 px-4 border-b">Category</TableHead>
                 <TableHead className="py-2 px-4 border-b">Title</TableHead>
                 <TableHead className="py-2 px-4 border-b">Rate</TableHead>
-                
+
                 <TableHead className="py-2 px-4 border-b">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -305,10 +279,10 @@ export default function RegistrationOfBooks() {
               {filteredBooks.map((book, idx) => (
                 <TableRow key={idx} className="hover:bg-gray-50">
                   <TableCell className="py-2 px-4 border-b">
-                    {book.ay}
+                    {book.academic_year}
                   </TableCell>
                   <TableCell className="py-2 px-4 border-b">
-                    {book.className}
+                    {book.class}
                   </TableCell>
                   <TableCell className="py-2 px-4 border-b">
                     {book.subject}
@@ -320,9 +294,9 @@ export default function RegistrationOfBooks() {
                     {book.title}
                   </TableCell>
                   <TableCell className="py-2 px-4 border-b">
-                    {book.currentRate}
+                    ₹{book.rate}
                   </TableCell>
-                  
+
                   <TableCell className="py-2 px-4 border-b">
                     <div className="flex gap-2">
                       <Button
