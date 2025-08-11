@@ -57,6 +57,7 @@ import StateBacklogEntry from "./pages/admin/StateBacklogEntry";
 import DistrictBacklogEntry from "./pages/admin/DistrictBacklogEntry";
 import BlockBacklogEntry from "./pages/admin/BlockBacklogEntry";
 import SchoolBacklogEntry from "./pages/admin/SchoolBacklogEntry";
+import ChartsVisualization from "./pages/admin/ChartsVisualization";
 
 const queryClient = new QueryClient();
 
@@ -89,6 +90,10 @@ const App = () => (
             element={<StateEChallan />}
           />
           <Route path="/admin/state/issues" element={<Issues />} />
+          <Route
+            path="/admin/state/charts-visualization"
+            element={<ChartsVisualization />}
+          />
           <Route
             path="/admin/state/notifications"
             element={<Notifications />}
