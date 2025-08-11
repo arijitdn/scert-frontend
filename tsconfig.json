@@ -22,7 +22,6 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noImplicitAny": false,
-    "noFallthroughCasesInSwitch": false,
     "strictNullChecks": false,
 
     /* Path mapping */
