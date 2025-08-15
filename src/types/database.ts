@@ -1,5 +1,20 @@
 export type ProfileType = "SCHOOL" | "BLOCK" | "DISTRICT" | "STATE";
 
+export interface UserProfile {
+  id: string;
+  user_id: string; // The ID used for login (UDISE, block_code, district_code, or "STATE")
+  role: "STATE" | "DISTRICT" | "BLOCK" | "SCHOOL" | "PRIVATE_SCHOOL";
+  name?: string;
+  district_code?: string;
+  block_code?: string;
+  school_id?: string;
+  udise?: string;
+  password_hash?: string;
+  is_first_login?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Book {
   id: string;
   title: string;
