@@ -43,12 +43,15 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import api from "@/lib/api";
 
 export default function StateLevelDashboard() {
   const [books, setBooks] = useState([]);
   const [schools, setSchools] = useState([]);
 
   const fetchData = async () => {
+    const { data: schoolsData } = await api.get("/schools");
+
     // Fetch Books
     const { data: booksData, error } = await supabase.from("Book").select("*");
     if (error) {
@@ -57,14 +60,10 @@ export default function StateLevelDashboard() {
       setBooks(booksData);
     }
 
-    // Fetch Schools
-    const { data: schoolsData, error: schoolsError } = await supabase
-      .from("School")
-      .select("*");
-    if (schoolsError) {
-      console.error("Error fetching schools:", schoolsError);
+    if (!schoolsData) {
+      console.error("Error fetching schools");
     } else {
-      setSchools(schoolsData);
+      setSchools(schoolsData.data);
     }
   };
 
@@ -84,7 +83,7 @@ export default function StateLevelDashboard() {
     { label: "Total IS", value: "100", icon: Users, change: "+0%" },
     {
       label: "Total Schools",
-      value: schools.length.toLocaleString(),
+      value: schools.length,
       icon: School,
       change: "+2.1%",
     },
@@ -269,7 +268,7 @@ export default function StateLevelDashboard() {
           {
             label: "Edit Profile",
             icon: User,
-            path: "/admin/state/create-profile",
+            path: "/admin/state/edit-profile",
           },
           {
             label: "Requisition",

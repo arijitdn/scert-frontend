@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
+// Removed AuthContext
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,65 +23,38 @@ const Login: React.FC = () => {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
 
-  const { signIn, changePassword, getDashboardPath } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
-
-  const from = (location.state as any)?.from?.pathname || getDashboardPath();
+  // Placeholder for redirect after login/change password
+  const from = "/dashboard";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
-
-    try {
-      const result = await signIn(userId, password);
-
-      if (result.error) {
-        setError(result.error.message);
-      } else if (result.needsPasswordChange) {
-        setNeedsPasswordChange(true);
-      } else {
-        // Navigate to the intended page or dashboard
-        navigate(from, { replace: true });
-      }
-    } catch (err) {
-      setError("An unexpected error occurred");
-    } finally {
+    // Placeholder logic: always require password change for demo
+    setTimeout(() => {
+      setNeedsPasswordChange(true);
       setLoading(false);
-    }
+    }, 1000);
   };
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (newPassword !== confirmPassword) {
       setError("Passwords do not match");
       return;
     }
-
     if (newPassword.length < 6) {
       setError("Password must be at least 6 characters long");
       return;
     }
-
     setError("");
     setLoading(true);
-
-    try {
-      const { error } = await changePassword(newPassword);
-
-      if (error) {
-        setError(error.message);
-      } else {
-        // Navigate to dashboard after successful password change
-        navigate(from, { replace: true });
-      }
-    } catch (err) {
-      setError("Failed to change password");
-    } finally {
+    // Placeholder: simulate password change success
+    setTimeout(() => {
+      navigate(from, { replace: true });
       setLoading(false);
-    }
+    }, 1000);
   };
 
   return (
