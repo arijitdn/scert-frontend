@@ -22,7 +22,7 @@ import {
   BarChart3,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import supabase from "@/lib/supabase";
+import { booksAPI, schoolsAPI } from "@/lib/api";
 import { useEffect, useState } from "react";
 import {
   ChartContainer,
@@ -43,27 +43,26 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import api from "@/lib/api";
 
 export default function StateLevelDashboard() {
   const [books, setBooks] = useState([]);
   const [schools, setSchools] = useState([]);
 
   const fetchData = async () => {
-    const { data: schoolsData } = await api.get("/schools");
+    try {
+      // Fetch Schools
+      const schoolsResponse = await schoolsAPI.getAll();
+      if (schoolsResponse.data.success) {
+        setSchools(schoolsResponse.data.data);
+      }
 
-    // Fetch Books
-    const { data: booksData, error } = await supabase.from("Book").select("*");
-    if (error) {
-      console.error("Error fetching books:", error);
-    } else {
-      setBooks(booksData);
-    }
-
-    if (!schoolsData) {
-      console.error("Error fetching schools");
-    } else {
-      setSchools(schoolsData.data);
+      // Fetch Books
+      const booksResponse = await booksAPI.getAll();
+      if (booksResponse.data.success) {
+        setBooks(booksResponse.data.data);
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
     }
   };
 

@@ -10,19 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect } from "react";
-import { DatabaseService } from "@/lib/database";
-import {
-  RequisitionWithDetails,
-  RequisitionStatus,
-  School,
-} from "@/types/database";
+import { requisitionsAPI, schoolsAPI } from "@/lib/api";
+import type { Requisition, School } from "@/types/database";
 
 const block_code = "160101"; // Block code for the authenticated block admin
 
 export default function BlockRequisition() {
-  const [requisitions, setRequisitions] = useState<RequisitionWithDetails[]>(
-    [],
-  );
+  const [requisitions, setRequisitions] = useState<Requisition[]>([]);
   const [schools, setSchools] = useState<School[]>([]);
   const [loading, setLoading] = useState(true);
   const [remarks, setRemarks] = useState<{ [key: string]: string }>({});
@@ -36,23 +30,22 @@ export default function BlockRequisition() {
   const loadRequisitions = async () => {
     try {
       setLoading(true);
-      const blockRequisitions =
-        await DatabaseService.getBlockRequisitions(block_code);
+      const blockRequisitionsResponse =
+        await requisitionsAPI.getByBlock(block_code);
+      const blockRequisitions: Requisition[] =
+        blockRequisitionsResponse.data.data;
       setRequisitions(blockRequisitions);
 
-      // Get unique school IDs and fetch school information
-      const schoolIds = [
-        ...new Set(blockRequisitions.map((req) => req.schoolId)),
-      ];
-      const schoolData = await DatabaseService.getSchoolsByIds(schoolIds);
+      // Get all schools in this block
+      const schoolsResponse = await schoolsAPI.getAll({ block: block_code });
+      const schoolData: School[] = schoolsResponse.data.data;
       setSchools(schoolData);
 
       // Initialize remarks from existing data
       const initialRemarks: { [key: string]: string } = {};
       blockRequisitions.forEach((req) => {
-        if (req.remarksByBlock) {
-          initialRemarks[req.id] = req.remarksByBlock;
-        }
+        // Note: remarks functionality would need to be added to the backend schema
+        initialRemarks[req.id] = "";
       });
       setRemarks(initialRemarks);
     } catch (error) {
@@ -68,7 +61,7 @@ export default function BlockRequisition() {
     return school?.name || `School UDISE: ${schoolId}`;
   };
 
-  // Group requisitions by school ID (since school relationship is not available)
+  // Group requisitions by school ID (since school relationship is available)
   const groupedRequisitions = requisitions.reduce(
     (acc, req) => {
       const schoolId = req.schoolId || "Unknown School";
@@ -76,13 +69,13 @@ export default function BlockRequisition() {
       acc[schoolId].push(req);
       return acc;
     },
-    {} as { [schoolId: string]: RequisitionWithDetails[] },
+    {} as { [schoolId: string]: Requisition[] },
   );
 
   // Handle status update
   const handleStatusUpdate = async (
     requisitionId: string,
-    newStatus: RequisitionStatus,
+    newStatus: string,
   ) => {
     try {
       // Validate that remarks are provided when approving
@@ -96,12 +89,16 @@ export default function BlockRequisition() {
 
       setUpdating((prev) => ({ ...prev, [requisitionId]: true }));
 
-      const updates: Partial<any> = { status: newStatus };
-      if (remarks[requisitionId]) {
-        updates.remarksByBlock = remarks[requisitionId];
+      // Find the requisition to get current books
+      const requisition = requisitions.find((req) => req.id === requisitionId);
+      if (!requisition) {
+        throw new Error("Requisition not found");
       }
 
-      await DatabaseService.updateRequisition(requisitionId, updates);
+      await requisitionsAPI.update(requisitionId, {
+        status: newStatus,
+        remarksByBlock: remarks[requisitionId] || "",
+      });
 
       // Reload requisitions to get updated data
       await loadRequisitions();
@@ -123,7 +120,13 @@ export default function BlockRequisition() {
     try {
       setUpdating((prev) => ({ ...prev, [requisitionId]: true }));
 
-      await DatabaseService.updateRequisition(requisitionId, {
+      // Find the requisition to get current books
+      const requisition = requisitions.find((req) => req.id === requisitionId);
+      if (!requisition) {
+        throw new Error("Requisition not found");
+      }
+
+      await requisitionsAPI.update(requisitionId, {
         remarksByBlock: remarks[requisitionId] || "",
       });
 

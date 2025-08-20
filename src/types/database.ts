@@ -82,10 +82,13 @@ export interface Requisition {
   remarksByBlock?: string;
   remarksByDistrict?: string;
   createdAt?: string;
-  updated_at?: string;
+  updatedAt?: string;
+  // Relationships included by backend
+  book?: Book;
+  school?: School;
 }
 
 export interface RequisitionWithDetails extends Requisition {
   book?: Book;
-  // school relationship not available in database schema
+  school?: School;
 }

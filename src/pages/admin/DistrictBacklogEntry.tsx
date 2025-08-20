@@ -19,14 +19,14 @@ import {
   Filter,
   X,
 } from "lucide-react";
-import { DatabaseService } from "@/lib/database";
-import { Book, BacklogEntryWithBook, ProfileType } from "@/types/database";
+import { backlogAPI, booksAPI } from "@/lib/api";
+import { Book, BacklogEntry, BacklogEntryWithBook } from "@/types/database";
 
 interface RowData {
   id: string;
   bookId: string;
   book?: Book;
-  type: ProfileType;
+  type: string;
   userId: string;
   quantity: string;
   isEditing: boolean;
@@ -78,26 +78,31 @@ export default function DistrictBacklogEntry() {
     const loadInitialData = async () => {
       setLoading(true);
       try {
-        const [
-          booksData,
-          classesData,
-          subjectsData,
-          categoriesData,
-          savedEntriesData,
-        ] = await Promise.all([
-          DatabaseService.getBooks(),
-          DatabaseService.getUniqueValues("class"),
-          DatabaseService.getUniqueValues("subject"),
-          DatabaseService.getUniqueValues("category"),
-          DatabaseService.getBacklogEntries("DISTRICT", "1601"),
+        const [booksResponse, savedEntriesResponse] = await Promise.all([
+          booksAPI.getAll(),
+          backlogAPI.getByType("DISTRICT", "1601"),
         ]);
+
+        const booksData: Book[] = booksResponse.data.data;
+        const savedEntriesData: BacklogEntryWithBook[] =
+          savedEntriesResponse.data.data;
 
         setBooks(booksData);
         setFilteredBooks(booksData);
+        setSavedEntries(savedEntriesData);
+
+        // Extract unique values from books
+        const classesData = [...new Set(booksData.map((book) => book.class))];
+        const subjectsData = [
+          ...new Set(booksData.map((book) => book.subject)),
+        ];
+        const categoriesData = [
+          ...new Set(booksData.map((book) => book.category)),
+        ];
+
         setClasses(classesData);
         setSubjects(subjectsData);
         setCategories(categoriesData);
-        setSavedEntries(savedEntriesData);
       } catch (error) {
         console.error("Error loading initial data:", error);
         alert("Error loading data. Please refresh the page.");
@@ -181,12 +186,14 @@ export default function DistrictBacklogEntry() {
     try {
       if (row.isNew) {
         // Create or update entry
-        const entry = await DatabaseService.createOrUpdateBacklogEntry({
+        const entryResponse = await backlogAPI.create({
           bookId: row.bookId,
-          type: row.type,
-          userId: row.userId,
+          type: "DISTRICT",
+          userId: "1601",
           quantity: parseInt(row.quantity),
         });
+
+        const entry: BacklogEntryWithBook = entryResponse.data;
 
         // Update the row with the real ID from database
         setRows((prev) =>
@@ -198,17 +205,16 @@ export default function DistrictBacklogEntry() {
         );
 
         // Refresh saved entries
-        const savedEntriesData = await DatabaseService.getBacklogEntries(
+        const savedEntriesResponse = await backlogAPI.getByType(
           "DISTRICT",
           "1601",
         );
+        const savedEntriesData: BacklogEntryWithBook[] =
+          savedEntriesResponse.data.data;
         setSavedEntries(savedEntriesData);
       } else {
         // Update existing entry
-        await DatabaseService.updateBacklogEntry(id, {
-          bookId: row.bookId,
-          type: row.type,
-          userId: row.userId,
+        await backlogAPI.update(id, {
           quantity: parseInt(row.quantity),
         });
 
@@ -217,10 +223,12 @@ export default function DistrictBacklogEntry() {
         );
 
         // Refresh saved entries
-        const savedEntriesData = await DatabaseService.getBacklogEntries(
+        const savedEntriesResponse = await backlogAPI.getByType(
           "DISTRICT",
           "1601",
         );
+        const savedEntriesData: BacklogEntryWithBook[] =
+          savedEntriesResponse.data.data;
         setSavedEntries(savedEntriesData);
       }
     } catch (error) {
@@ -240,13 +248,15 @@ export default function DistrictBacklogEntry() {
       try {
         if (!row.isNew) {
           // Delete from database if it's not a new entry
-          await DatabaseService.deleteBacklogEntry(id);
+          await backlogAPI.delete(id);
 
           // Refresh saved entries
-          const savedEntriesData = await DatabaseService.getBacklogEntries(
+          const savedEntriesResponse = await backlogAPI.getByType(
             "DISTRICT",
             "1601",
           );
+          const savedEntriesData: BacklogEntryWithBook[] =
+            savedEntriesResponse.data.data;
           setSavedEntries(savedEntriesData);
         }
 
@@ -275,18 +285,16 @@ export default function DistrictBacklogEntry() {
     try {
       const promises = unsavedRows.map(async (row) => {
         if (row.isNew) {
-          const entry = await DatabaseService.createOrUpdateBacklogEntry({
+          const entryResponse = await backlogAPI.create({
             bookId: row.bookId,
-            type: row.type,
-            userId: row.userId,
+            type: "DISTRICT",
+            userId: "1601",
             quantity: parseInt(row.quantity),
           });
+          const entry: BacklogEntryWithBook = entryResponse.data;
           return { oldId: row.id, newId: entry.id! };
         } else {
-          await DatabaseService.updateBacklogEntry(row.id, {
-            bookId: row.bookId,
-            type: row.type,
-            userId: row.userId,
+          await backlogAPI.update(row.id, {
             quantity: parseInt(row.quantity),
           });
           return null;
@@ -312,10 +320,12 @@ export default function DistrictBacklogEntry() {
       );
 
       // Refresh saved entries
-      const savedEntriesData = await DatabaseService.getBacklogEntries(
+      const savedEntriesResponse = await backlogAPI.getByType(
         "DISTRICT",
         "1601",
       );
+      const savedEntriesData: BacklogEntryWithBook[] =
+        savedEntriesResponse.data.data;
       setSavedEntries(savedEntriesData);
 
       alert("All changes saved successfully!");
@@ -351,13 +361,15 @@ export default function DistrictBacklogEntry() {
     ) {
       setSaving(true);
       try {
-        await DatabaseService.deleteBacklogEntry(entryId);
+        await backlogAPI.delete(entryId);
 
         // Refresh saved entries
-        const savedEntriesData = await DatabaseService.getBacklogEntries(
+        const savedEntriesResponse = await backlogAPI.getByType(
           "DISTRICT",
           "1601",
         );
+        const savedEntriesData: BacklogEntryWithBook[] =
+          savedEntriesResponse.data.data;
         setSavedEntries(savedEntriesData);
 
         alert("Backlog entry deleted successfully!");

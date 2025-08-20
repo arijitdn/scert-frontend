@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
-import { Trash2, Edit2 } from "lucide-react";
+import { Trash2, Edit2, Loader2 } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import supabase from "@/lib/supabase";
+import { booksAPI } from "@/lib/api";
 
 const ayOptions = ["2022-23", "2023-24", "2024-25"];
 const classOptions = ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5"];
@@ -33,27 +33,51 @@ const initialFormData = {
   academic_year: "",
 };
 
+interface Book {
+  id: string;
+  title: string;
+  class: string;
+  subject: string;
+  category: string;
+  rate: number;
+  academic_year: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function RegistrationOfBooks() {
-  const [books, setBooks] = useState([]);
+  const [books, setBooks] = useState<Book[]>([]);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("All");
   const [filterValue, setFilterValue] = useState("");
   const [editIndex, setEditIndex] = useState(-1);
   const [formData, setFormData] = useState(initialFormData);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function fetchData() {
-    const { data: booksData, error } = await supabase.from("Book").select("*");
-    if (error) {
-      console.error("Error fetching books:", error);
-    } else {
-      setBooks(booksData);
+    try {
+      setLoading(true);
+      const response = await booksAPI.getAll();
+      if (response.data.success) {
+        setBooks(response.data.data);
+      } else {
+        setError("Failed to fetch books");
+      }
+    } catch (err) {
+      console.error("Error fetching books:", err);
+      setError("Failed to connect to server");
+    } finally {
+      setLoading(false);
     }
   }
 
-  const handleChange = (e) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    fetchData();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -72,44 +96,130 @@ export default function RegistrationOfBooks() {
       return;
     }
 
-    await supabase.from("Book").upsert({
-      ...formData,
-      rate: Number(formData.rate),
-    });
+    try {
+      setSubmitting(true);
 
-    // Reset form
-    setFormData(initialFormData);
+      const bookData = {
+        title: formData.title,
+        class: formData.class,
+        subject: formData.subject,
+        category: formData.category,
+        rate: Number(formData.rate),
+        academic_year: formData.academic_year,
+      };
 
-    fetchData();
+      if (editIndex !== -1) {
+        // Update existing book
+        const bookToUpdate = books[editIndex];
+        const response = await booksAPI.update(bookToUpdate.id, bookData);
+        if (response.data.success) {
+          setBooks(
+            books.map((book, index) =>
+              index === editIndex ? response.data.data : book,
+            ),
+          );
+          setEditIndex(-1);
+        } else {
+          alert("Failed to update book");
+        }
+      } else {
+        // Create new book
+        const response = await booksAPI.create(bookData);
+        if (response.data.success) {
+          setBooks([...books, response.data.data]);
+        } else {
+          alert("Failed to create book");
+        }
+      }
+
+      // Reset form
+      setFormData(initialFormData);
+    } catch (err) {
+      console.error("Error submitting book:", err);
+      alert("Failed to save book");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleDelete = (idx: number) => {
-    setBooks(books.filter((_, i) => i !== idx));
+  const handleDelete = async (idx: number) => {
+    const book = books[idx];
+    if (window.confirm(`Are you sure you want to delete "${book.title}"?`)) {
+      try {
+        const response = await booksAPI.delete(book.id);
+        if (response.data.success) {
+          setBooks(books.filter((_, i) => i !== idx));
+        } else {
+          alert("Failed to delete book");
+        }
+      } catch (err) {
+        console.error("Error deleting book:", err);
+        alert("Failed to delete book");
+      }
+    }
   };
 
   const handleEdit = (idx: number) => {
     setEditIndex(idx);
-    setFormData({ ...books[idx] });
+    const book = books[idx];
+    setFormData({
+      title: book.title,
+      class: book.class,
+      subject: book.subject,
+      category: book.category,
+      rate: book.rate.toString(),
+      academic_year: book.academic_year,
+    });
   };
 
   // Filtering logic
   let filteredBooks = books.filter(
     (book) =>
       book.title.toLowerCase().includes(search.toLowerCase()) ||
-      book.className.toLowerCase().includes(search.toLowerCase()) ||
+      book.class.toLowerCase().includes(search.toLowerCase()) ||
       book.subject.toLowerCase().includes(search.toLowerCase()),
   );
   if (filterType !== "All" && filterValue) {
     filteredBooks = filteredBooks.filter((book) =>
       filterType === "Subject"
         ? book.subject === filterValue
-        : book.className === filterValue,
+        : book.class === filterValue,
     );
   }
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  if (loading) {
+    return (
+      <AdminLayout
+        title="Register Book"
+        description="Loading books..."
+        adminLevel="STATE ADMIN"
+      >
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading books...</span>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AdminLayout
+        title="Register Book"
+        description="Error loading books"
+        adminLevel="STATE ADMIN"
+      >
+        <div className="text-center py-20">
+          <p className="text-red-500 mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()}>Retry</Button>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout
@@ -210,9 +320,19 @@ export default function RegistrationOfBooks() {
               <div className="flex justify-center pt-4">
                 <Button
                   type="submit"
+                  disabled={submitting}
                   className="w-1/2 text-lg font-bold bg-gradient-to-r from-purple-500 to-pink-500 text-white hover:from-pink-500 hover:to-purple-500"
                 >
-                  {editIndex !== -1 ? "UPDATE" : "SUBMIT"}
+                  {submitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      {editIndex !== -1 ? "UPDATING..." : "SUBMITTING..."}
+                    </>
+                  ) : editIndex !== -1 ? (
+                    "UPDATE"
+                  ) : (
+                    "SUBMIT"
+                  )}
                 </Button>
               </div>
             </form>

@@ -14,13 +14,7 @@ import {
 } from "@/components/ui/select";
 import { useState, useEffect } from "react";
 import { BookOpen, Send, Loader2, AlertCircle } from "lucide-react";
-import { DatabaseService } from "@/lib/database";
-import {
-  RequisitionWithDetails,
-  StockWithBook,
-  School,
-  Book,
-} from "@/types/database";
+import { requisitionsAPI, stockAPI, schoolsAPI, booksAPI } from "@/lib/api";
 import {
   getDistrictName,
   getBlockName,
@@ -28,6 +22,18 @@ import {
   getStatusBadgeClass,
   BOOK_MEDIUMS,
 } from "@/lib/constants";
+import type {
+  Book,
+  Requisition,
+  School,
+  Stock,
+  StockWithBook,
+} from "@/types/database";
+
+interface RequisitionWithDetails extends Requisition {
+  school?: School;
+  bookDetails?: Book[];
+}
 
 // Types for our combined data structures
 interface WorkOrderItem {
@@ -94,16 +100,22 @@ export default function Requisition() {
       setLoading(true);
       setError(null);
 
-      // Fetch all requisitions with book details
-      const requisitions = await DatabaseService.getAllRequisitions();
+      // Fetch all requisitions
+      const requisitionsResponse = await requisitionsAPI.getAll();
+      const requisitions: Requisition[] = requisitionsResponse.data.data;
 
-      // Fetch state stock
-      const stock = await DatabaseService.getStateStock();
+      // Fetch state stock (stock without specific school)
+      const stockResponse = await stockAPI.getStateStock();
+      const stock: StockWithBook[] = stockResponse.data.data;
       setStateStock(stock);
 
-      // Fetch schools for mapping school IDs to names and districts
-      const schoolIds = [...new Set(requisitions.map((req) => req.schoolId))];
-      const schools = await DatabaseService.getSchoolsByIds(schoolIds);
+      // Fetch all schools for mapping
+      const schoolsResponse = await schoolsAPI.getAll();
+      const schools: School[] = schoolsResponse.data.data;
+
+      // Fetch all books for mapping
+      const booksResponse = await booksAPI.getAll();
+      const books: Book[] = booksResponse.data.data;
 
       // Process work order data - combine requisitions by book
       const bookRequisitions: {
@@ -115,17 +127,18 @@ export default function Requisition() {
       } = {};
 
       requisitions.forEach((req) => {
-        if (req.book) {
+        const book = books.find((b) => b.id === req.bookId);
+        if (book) {
           const bookId = req.bookId;
           if (!bookRequisitions[bookId]) {
             bookRequisitions[bookId] = {
-              book: req.book,
+              book: book,
               totalQuantity: 0,
               totalReceived: 0,
             };
           }
           bookRequisitions[bookId].totalQuantity += req.quantity;
-          bookRequisitions[bookId].totalReceived += req.received;
+          bookRequisitions[bookId].totalReceived += req.received || 0;
         }
       });
 
@@ -155,8 +168,9 @@ export default function Requisition() {
         {};
 
       requisitions.forEach((req) => {
-        const school = schools.find((s) => s.udise === req.schoolId);
-        if (school && req.book) {
+        // The backend should include the school relationship
+        const school = req.school || schools.find((s) => s.id === req.schoolId);
+        if (school) {
           const districtCode = school.district_code;
           const districtName = getDistrictName(districtCode);
 
@@ -167,6 +181,7 @@ export default function Requisition() {
               schools: [],
             };
           }
+
           let schoolData = districtData[districtCode].schools.find(
             (s) => s.schoolId === school.udise,
           );
@@ -179,17 +194,20 @@ export default function Requisition() {
             districtData[districtCode].schools.push(schoolData);
           }
 
-          schoolData.requests.push({
-            reqId: req.reqId,
-            className: req.book.class,
-            subject: req.book.subject,
-            book: req.book.title,
-            requested: req.quantity,
-            received: req.received,
-            status: req.status,
-            remarksByBlock: req.remarksByBlock,
-            remarksByDistrict: req.remarksByDistrict,
-          });
+          const book = books.find((b) => b.id === req.bookId);
+          if (book) {
+            schoolData!.requests.push({
+              reqId: req.id,
+              className: book.class,
+              subject: book.subject,
+              book: book.title,
+              requested: req.quantity,
+              received: req.received || 0,
+              status: req.status,
+              remarksByBlock: req.remarksByBlock || "",
+              remarksByDistrict: req.remarksByDistrict || "",
+            });
+          }
         }
       });
 
@@ -249,45 +267,38 @@ export default function Requisition() {
     try {
       setUpdating(key);
 
-      // Update the requisition in database
-      const requisitions = await DatabaseService.getAllRequisitions();
-      const reqToUpdate = requisitions.find((r) => r.reqId === request.reqId);
+      // For now, we'll update the requisition status
+      // Note: The tracking of "received" quantities would need to be implemented
+      // in the backend schema if detailed tracking is required
 
-      if (reqToUpdate) {
-        const newReceived = reqToUpdate.received + toSend;
-        const newStatus =
-          newReceived >= reqToUpdate.quantity ? "COMPLETED" : "APPROVED";
+      // Update requisition status to COMPLETED if needed
+      const newStatus =
+        quantity >= request.requested ? "COMPLETED" : "APPROVED";
 
-        await DatabaseService.updateRequisition(reqToUpdate.id, {
-          received: newReceived,
-          status: newStatus,
+      await requisitionsAPI.update(request.reqId, {
+        status: newStatus,
+        received: request.received + toSend,
+      });
+
+      // Update state stock
+      const stockItem = stateStock.find((s) => s.book?.title === request.book);
+      if (stockItem) {
+        await stockAPI.update(stockItem.id, {
+          quantity: stockItem.quantity - toSend,
         });
-
-        // Update state stock
-        const stockItem = stateStock.find(
-          (s) => s.book?.title === request.book,
-        );
-        if (stockItem) {
-          await DatabaseService.updateStockQuantity(
-            stockItem.bookId,
-            "STATE",
-            stockItem.userId,
-            stockItem.quantity - toSend,
-          );
-        }
-
-        // Reload data to reflect changes
-        await loadData();
-
-        // Clear the input
-        setBatchInputs((prev) => ({ ...prev, [key]: "" }));
-
-        // Show success message
-        setSuccessMessage(
-          `Successfully sent ${toSend} books to ${school.schoolName}`,
-        );
-        setTimeout(() => setSuccessMessage(null), 5000);
       }
+
+      // Reload data to reflect changes
+      await loadData();
+
+      // Clear the input
+      setBatchInputs((prev) => ({ ...prev, [key]: "" }));
+
+      // Show success message
+      setSuccessMessage(
+        `Successfully sent ${toSend} books to ${school.schoolName}`,
+      );
+      setTimeout(() => setSuccessMessage(null), 5000);
     } catch (error) {
       console.error("Error sending batch:", error);
       setError("Failed to send books. Please try again.");

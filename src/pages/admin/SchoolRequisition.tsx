@@ -9,10 +9,21 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
-import { DatabaseService } from "@/lib/database";
-import { StockWithBook, Book, RequisitionWithDetails } from "@/types/database";
+import { booksAPI, stockAPI, requisitionsAPI, schoolsAPI } from "@/lib/api";
+import type { School, StockWithBook, Requisition } from "@/types/database";
 
-const schoolId = "16010100108";
+// Types
+interface Book {
+  id: string;
+  title: string;
+  class: string;
+  subject: string;
+  category: string;
+  rate: number;
+  academic_year: string;
+}
+
+const schoolUdise = "16010100108";
 
 export default function SchoolRequisition() {
   // Step-wise selection states
@@ -29,6 +40,7 @@ export default function SchoolRequisition() {
   const [quantity, setQuantity] = useState("");
 
   // Data states
+  const [school, setSchool] = useState<School | null>(null);
   const [schoolStock, setSchoolStock] = useState<StockWithBook[]>([]);
   const [currentRequisitions, setCurrentRequisitions] = useState<
     Array<{
@@ -40,9 +52,7 @@ export default function SchoolRequisition() {
       quantity: number;
     }>
   >([]);
-  const [pastRequisitions, setPastRequisitions] = useState<
-    RequisitionWithDetails[]
-  >([]);
+  const [pastRequisitions, setPastRequisitions] = useState<Requisition[]>([]);
   const [selectedStockClass, setSelectedStockClass] = useState("");
 
   // Loading states
@@ -58,21 +68,39 @@ export default function SchoolRequisition() {
     try {
       setLoading(true);
 
-      // Load all classes
-      const allClasses = await DatabaseService.getUniqueValues("class");
-      setClasses(allClasses);
+      // First, get the school's database ID from the UDISE code
+      const schoolsResponse = await schoolsAPI.getAll();
+      const schools: School[] = schoolsResponse.data.data;
+      const schoolData = schools.find((s) => s.udise === schoolUdise);
 
-      if (allClasses.length > 0) {
-        setSelectedStockClass(allClasses[0]);
+      if (!schoolData) {
+        throw new Error(`School with UDISE ${schoolUdise} not found`);
       }
 
-      // Load school stock
-      const stock = await DatabaseService.getSchoolStock(schoolId);
+      console.log("Found school:", schoolData);
+      setSchool(schoolData);
+
+      // Load all books to get unique classes
+      const booksResponse = await booksAPI.getAll();
+      const allBooks: Book[] = booksResponse.data.data;
+      const uniqueClasses = [...new Set(allBooks.map((book) => book.class))];
+      setClasses(uniqueClasses);
+
+      if (uniqueClasses.length > 0) {
+        setSelectedStockClass(uniqueClasses[0]);
+      }
+
+      // Load school stock using UDISE (stock API might still use UDISE)
+      const stockResponse = await stockAPI.getBySchool(schoolUdise);
+      const stock: StockWithBook[] = stockResponse.data.data;
       setSchoolStock(stock);
 
-      // Load past requisitions
-      const requisitions =
-        await DatabaseService.getSchoolRequisitions(schoolId);
+      // Load past requisitions for this school using database ID
+      const requisitionsResponse = await requisitionsAPI.getBySchool(
+        schoolData.id,
+      );
+      const requisitions: Requisition[] = requisitionsResponse.data.data;
+      console.log("Loaded requisitions in initial load:", requisitions);
       setPastRequisitions(requisitions);
     } catch (error) {
       console.error("Error loading initial data:", error);
@@ -93,9 +121,12 @@ export default function SchoolRequisition() {
 
   const loadSubjects = async () => {
     try {
-      const classSubjects =
-        await DatabaseService.getSubjectsByClass(selectedClass);
-      setSubjects(classSubjects);
+      const booksResponse = await booksAPI.getAll({ class: selectedClass });
+      const classBooks: Book[] = booksResponse.data.data;
+      const uniqueSubjects = [
+        ...new Set(classBooks.map((book) => book.subject)),
+      ];
+      setSubjects(uniqueSubjects);
       setSelectedSubject("");
       setCategories([]);
       setSelectedCategory("");
@@ -118,12 +149,15 @@ export default function SchoolRequisition() {
 
   const loadCategories = async () => {
     try {
-      const classSubjectCategories =
-        await DatabaseService.getCategoriesByClassAndSubject(
-          selectedClass,
-          selectedSubject,
-        );
-      setCategories(classSubjectCategories);
+      const booksResponse = await booksAPI.getAll({
+        class: selectedClass,
+        subject: selectedSubject,
+      });
+      const classSubjectBooks: Book[] = booksResponse.data.data;
+      const uniqueCategories = [
+        ...new Set(classSubjectBooks.map((book) => book.category)),
+      ];
+      setCategories(uniqueCategories);
       setSelectedCategory("");
       setBooks([]);
       setSelectedBook("");
@@ -144,11 +178,12 @@ export default function SchoolRequisition() {
 
   const loadBooks = async () => {
     try {
-      const filteredBooks = await DatabaseService.getBooksByFilters(
-        selectedClass,
-        selectedSubject,
-        selectedCategory,
-      );
+      const booksResponse = await booksAPI.getAll({
+        class: selectedClass,
+        subject: selectedSubject,
+        category: selectedCategory,
+      });
+      const filteredBooks: Book[] = booksResponse.data.data;
       setBooks(filteredBooks);
       setSelectedBook("");
     } catch (error) {
@@ -193,6 +228,22 @@ export default function SchoolRequisition() {
     setQuantity("");
   };
 
+  // Generate a unique requisition ID in format REQ-YYYYMMDDHHMMSS-XXX
+  const generateReqId = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const hours = String(now.getHours()).padStart(2, "0");
+    const minutes = String(now.getMinutes()).padStart(2, "0");
+    const seconds = String(now.getSeconds()).padStart(2, "0");
+    const random = Math.floor(Math.random() * 1000)
+      .toString()
+      .padStart(3, "0");
+
+    return `REQ-${year}${month}${day}${hours}${minutes}${seconds}-${random}`;
+  };
+
   // Submit all current requisitions
   const handleSubmitAll = async () => {
     if (currentRequisitions.length === 0) {
@@ -200,23 +251,32 @@ export default function SchoolRequisition() {
       return;
     }
 
+    if (!school) {
+      alert("School information not loaded. Please refresh and try again.");
+      return;
+    }
+
     try {
       setSubmitting(true);
 
-      // Create requisitions in database
-      for (const item of currentRequisitions) {
-        await DatabaseService.createRequisition({
+      // Create individual requisitions for each book
+      const createPromises = currentRequisitions.map((item) =>
+        requisitionsAPI.create({
+          schoolId: school.id, // Use the database ID, not UDISE
           bookId: item.bookId,
-          schoolId: schoolId,
           quantity: item.quantity,
-          received: 0,
-          status: "PENDING",
-        });
-      }
+          reqId: generateReqId(),
+        }),
+      );
 
-      // Reload past requisitions
-      const requisitions =
-        await DatabaseService.getSchoolRequisitions(schoolId);
+      // Wait for all requisitions to be created
+      await Promise.all(createPromises);
+      console.log("All requisitions created successfully");
+
+      // Reload past requisitions using the school's database ID
+      const requisitionsResponse = await requisitionsAPI.getBySchool(school.id);
+      const requisitions: Requisition[] = requisitionsResponse.data.data;
+      console.log("Reloaded requisitions after submission:", requisitions);
       setPastRequisitions(requisitions);
 
       // Clear current requisitions
@@ -546,11 +606,14 @@ export default function SchoolRequisition() {
                       <td className="px-4 py-2 font-mono text-sm">
                         {req.reqId}
                       </td>
-                      <td className="px-4 py-2">{req.book?.title}</td>
-                      <td className="px-4 py-2">{req.book?.class}</td>
-                      <td className="px-4 py-2">{req.book?.subject}</td>
+                      <td className="px-4 py-2">
+                        {req.book?.title || `Book ID: ${req.bookId}`}
+                      </td>
+                      <td className="px-4 py-2">{req.book?.class || "-"}</td>
+                      <td className="px-4 py-2">{req.book?.subject || "-"}</td>
                       <td className="px-4 py-2">{req.quantity}</td>
-                      <td className="px-4 py-2">{req.received}</td>
+                      <td className="px-4 py-2">0</td>
+                      {/* No received tracking yet */}
                       <td className="px-4 py-2">
                         <span
                           className={`px-2 py-1 rounded text-sm ${

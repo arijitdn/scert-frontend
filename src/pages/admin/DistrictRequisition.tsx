@@ -9,8 +9,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useState, useEffect } from "react";
-import { DatabaseService } from "@/lib/database";
-import {
+import { requisitionsAPI, schoolsAPI } from "@/lib/api";
+import type {
+  Requisition,
   RequisitionWithDetails,
   RequisitionStatus,
   School,
@@ -35,16 +36,30 @@ export default function DistrictRequisition() {
   const loadRequisitions = async () => {
     try {
       setLoading(true);
-      const districtRequisitions =
-        await DatabaseService.getDistrictRequisitions(DISTRICT_ID);
+
+      // Fetch all requisitions and filter by district
+      const requisitionsResponse = await requisitionsAPI.getAll();
+      const allRequisitions: Requisition[] = requisitionsResponse.data.data;
+
+      // Filter requisitions for this district based on school UDISE codes
+      const districtRequisitions = allRequisitions.filter((req) =>
+        req.school?.udise?.startsWith(DISTRICT_ID),
+      );
       setRequisitions(districtRequisitions);
 
       // Get unique school IDs and fetch school information
       const schoolIds = [
         ...new Set(districtRequisitions.map((req) => req.schoolId)),
       ];
-      const schoolData = await DatabaseService.getSchoolsByIds(schoolIds);
-      setSchools(schoolData);
+
+      if (schoolIds.length > 0) {
+        const schoolsResponse = await schoolsAPI.getAll();
+        const allSchools: School[] = schoolsResponse.data.data;
+        const schoolData = allSchools.filter((school) =>
+          schoolIds.includes(school.udise),
+        );
+        setSchools(schoolData);
+      }
 
       // Initialize remarks from existing data
       const initialRemarks: { [key: string]: string } = {};
@@ -107,7 +122,7 @@ export default function DistrictRequisition() {
         updates.remarksByDistrict = remarks[requisitionId];
       }
 
-      await DatabaseService.updateRequisition(requisitionId, updates);
+      await requisitionsAPI.update(requisitionId, updates);
 
       // Reload requisitions to get updated data
       await loadRequisitions();
@@ -129,7 +144,7 @@ export default function DistrictRequisition() {
     try {
       setUpdating((prev) => ({ ...prev, [requisitionId]: true }));
 
-      await DatabaseService.updateRequisition(requisitionId, {
+      await requisitionsAPI.update(requisitionId, {
         remarksByDistrict: remarks[requisitionId] || "",
       });
 
