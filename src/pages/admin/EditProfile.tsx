@@ -435,12 +435,12 @@ export default function EditProfile() {
                               Reset
                             </Button>
                           </div>
-                          <Button
+                          {/* <Button
                             className="mt-2"
                             onClick={() => navigate("/admin/school/profile")}
                           >
                             Edit
-                          </Button>
+                          </Button> */}
                         </div>
                       </CardContent>
                     </Card>

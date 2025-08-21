@@ -492,7 +492,7 @@ export default function StateLevelDashboard() {
 
       <div className="grid lg:grid-cols-1 gap-6">
         {/* Districts Overview */}
-        <div>
+        {/* <div>
           <Card>
             <CardHeader>
               <CardTitle>List of Districts</CardTitle>
@@ -534,7 +534,7 @@ export default function StateLevelDashboard() {
               </div>
             </CardContent>
           </Card>
-        </div>
+        </div> */}
       </div>
     </AdminLayout>
   );
