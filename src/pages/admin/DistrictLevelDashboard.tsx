@@ -218,7 +218,7 @@ export default function DistrictLevelDashboard() {
           {
             label: "Received",
             icon: BookCheck,
-            path: "/admin/school/received",
+            path: "/admin/district/received",
           },
           {
             label: "Add Private School",

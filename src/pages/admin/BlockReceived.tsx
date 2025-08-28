@@ -18,34 +18,49 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { stockAPI, requisitionsAPI, booksAPI } from "@/lib/api";
+import { stockAPI, echallanAPI } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 // Types for API data
-interface Book {
+interface EChallanBook {
   id: string;
-  title: string;
-  class: string;
+  bookId: string;
+  className: string;
   subject: string;
-  category: string;
-  rate: number;
-  academic_year: string;
+  bookName: string;
+  noOfBoxes: number;
+  noOfPackets: number;
+  noOfLooseBoxes: number;
+  totalQuantity: number;
+  book: {
+    id: string;
+    title: string;
+    class: string;
+    subject: string;
+    category: string;
+    rate: number;
+  };
 }
 
-interface Requisition {
+interface EChallan {
   id: string;
-  reqId: string;
-  schoolId: string;
-  bookId: string;
-  quantity: number;
-  received: number;
+  challanId: string;
+  challanNo: string;
+  destinationType: string;
+  destinationName: string;
+  destinationId: string;
+  requisitionId: string;
+  academicYear: string;
+  vehicleNo?: string;
+  agency?: string;
+  totalBooks: number;
+  totalBoxes: number;
+  totalPackets: number;
+  totalLooseBoxes: number;
   status: string;
-  book: Book;
-  school: {
-    id: string;
-    name: string;
-    udise: string;
-  };
+  generatedAt: string;
+  deliveredAt?: string;
+  books: EChallanBook[];
 }
 
 interface Stock {
@@ -54,123 +69,81 @@ interface Stock {
   userId: string;
   type: string;
   quantity: number;
-  book: Book;
-  school?: {
+  book: {
     id: string;
-    name: string;
-    udise: string;
+    title: string;
+    class: string;
+    subject: string;
+    category: string;
+    rate: number;
   };
 }
 
 interface ReceivedItem {
   id: string;
-  class: string;
+  challanNo: string;
   bookName: string;
   bookId: string;
-  medium: string;
-  requisitioned: number;
+  class: string;
+  subject: string;
+  totalQuantity: number;
   received: number;
 }
-
-export default function StateReceivedItems({
-  adminLevel,
-}: {
-  adminLevel: string;
-}) {
+export default function BlockReceived({ adminLevel }: { adminLevel: string }) {
   const [receivedData, setReceivedData] = useState<ReceivedItem[]>([]);
-  const [books, setBooks] = useState<Book[]>([]);
-  const [requisitions, setRequisitions] = useState<Requisition[]>([]);
+  const [echallans, setEchallans] = useState<EChallan[]>([]);
   const [stockData, setStockData] = useState<Stock[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedClass, setSelectedClass] = useState<string | null>(null);
-  const [selectedBookName, setSelectedBookName] = useState<string | null>(null);
+  const [selectedChallanNo, setSelectedChallanNo] = useState<string | null>(
+    null,
+  );
+  const [selectedBook, setSelectedBook] = useState<EChallanBook | null>(null);
   const [stockEntryData, setStockEntryData] = useState({
-    class: "",
+    challanNo: "",
     bookName: "",
     bookId: "",
-    medium: "",
-    requisitioned: 0,
+    class: "",
+    subject: "",
+    totalQuantity: 0,
     received: 0,
     left: 0,
   });
   const { toast } = useToast();
 
-  // Get unique classes from approved requisitions
-  const getAvailableClasses = () => {
-    // First try to get from approved/completed requisitions
-    let approvedRequisitions = requisitions.filter(
-      (req) => req.status === "APPROVED" || req.status === "COMPLETED",
+  // Get available eChallan numbers that are delivered to block/IS
+  const getAvailableEChallans = () => {
+    const deliveredEChallans = echallans.filter(
+      (challan) =>
+        challan.status === "DELIVERED" && challan.destinationType === "IS", // Block level uses IS (Intermediate School) designation
     );
 
-    console.log("Total requisitions:", requisitions.length);
-    console.log(
-      "Approved/Completed requisitions:",
-      approvedRequisitions.length,
-    );
+    console.log("Total eChallans:", echallans.length);
+    console.log("Delivered to IS/Block eChallans:", deliveredEChallans.length);
 
-    // If no approved requisitions, show all requisitions for debugging
-    if (approvedRequisitions.length === 0) {
+    if (deliveredEChallans.length === 0) {
       console.log(
-        "No approved requisitions found, checking all statuses:",
-        requisitions
-          .map((req) => req.status)
+        "No delivered eChallans found, checking all statuses:",
+        echallans
+          .map((ch) => ch.status)
           .filter((v, i, arr) => arr.indexOf(v) === i),
       );
-      // Fallback to include all requisitions to at least show something
-      approvedRequisitions = requisitions;
+      // Fallback to show all eChallans if no delivered ones exist
+      return echallans;
     }
 
-    console.log(
-      "Approved requisitions sample:",
-      approvedRequisitions.slice(0, 3),
-    );
-
-    const classesSet = new Set(
-      approvedRequisitions.map((req) => req.book?.class).filter(Boolean),
-    );
-
-    const classes = Array.from(classesSet).sort((a, b) => {
-      // Sort numerically for class numbers
-      const numA = parseInt(a);
-      const numB = parseInt(b);
-      if (!isNaN(numA) && !isNaN(numB)) {
-        return numA - numB;
-      }
-      return a.localeCompare(b);
-    });
-
-    console.log("Available classes:", classes);
-    return classes;
+    return deliveredEChallans;
   };
 
-  // Get books for selected class from approved requisitions
-  const getFilteredBooks = () => {
-    if (!selectedClass) return [];
+  // Get books from selected eChallan
+  const getBooksFromSelectedChallan = () => {
+    if (!selectedChallanNo) return [];
 
-    // First try approved/completed requisitions
-    let approvedRequisitions = requisitions.filter(
-      (req) =>
-        (req.status === "APPROVED" || req.status === "COMPLETED") &&
-        req.book.class === selectedClass,
+    const selectedChallan = echallans.find(
+      (challan) => challan.challanNo === selectedChallanNo,
     );
 
-    // If no approved requisitions for this class, use all requisitions as fallback
-    if (approvedRequisitions.length === 0) {
-      approvedRequisitions = requisitions.filter(
-        (req) => req.book.class === selectedClass,
-      );
-    }
-
-    // Get unique books
-    const booksMap = new Map();
-    approvedRequisitions.forEach((req) => {
-      if (!booksMap.has(req.book.id)) {
-        booksMap.set(req.book.id, req.book);
-      }
-    });
-
-    return Array.from(booksMap.values());
+    return selectedChallan ? selectedChallan.books || [] : [];
   };
 
   // Fetch data on component mount
@@ -179,21 +152,18 @@ export default function StateReceivedItems({
       try {
         setLoading(true);
 
-        // Fetch books, requisitions, and stock data in parallel
-        const [booksResponse, requisitionsResponse, stockResponse] =
-          await Promise.all([
-            booksAPI.getAll(),
-            requisitionsAPI.getAll(),
-            stockAPI.getStateStock(),
-          ]);
+        // Fetch eChallans and stock data in parallel
+        const [echallansResponse, stockResponse] = await Promise.all([
+          echallanAPI.getAll(),
+          stockAPI.getAll({ type: "BLOCK" }),
+        ]);
 
-        setBooks(booksResponse.data.data || []);
-        setRequisitions(requisitionsResponse.data.data || []);
+        setEchallans(echallansResponse.data.data || []);
         setStockData(stockResponse.data.data || []);
 
-        // Process received items from requisitions and stock
+        // Process received items from eChallans and stock
         const processedReceivedItems = processReceivedData(
-          requisitionsResponse.data.data || [],
+          echallansResponse.data.data || [],
           stockResponse.data.data || [],
         );
         setReceivedData(processedReceivedItems);
@@ -212,51 +182,38 @@ export default function StateReceivedItems({
     fetchData();
   }, [toast]);
 
-  // Process received data from requisitions and stock
+  // Process received data from eChallans and stock
   const processReceivedData = (
-    requisitions: Requisition[],
+    echallans: EChallan[],
     stock: Stock[],
   ): ReceivedItem[] => {
     const receivedItems: ReceivedItem[] = [];
 
-    // Group requisitions by book
-    const bookRequistitonMap = new Map<string, Requisition[]>();
-    requisitions.forEach((req) => {
-      const key = req.bookId;
-      if (!bookRequistitonMap.has(key)) {
-        bookRequistitonMap.set(key, []);
-      }
-      bookRequistitonMap.get(key)!.push(req);
-    });
+    // Get all books from delivered eChallans
+    const deliveredEChallans = echallans.filter(
+      (challan) =>
+        challan.status === "DELIVERED" && challan.destinationType === "IS", // Block level uses IS designation
+    );
 
-    // Create received items from approved requisitions
-    bookRequistitonMap.forEach((reqs, bookId) => {
-      const approvedReqs = reqs.filter(
-        (req) => req.status === "APPROVED" || req.status === "COMPLETED",
-      );
+    deliveredEChallans.forEach((challan) => {
+      if (challan.books && challan.books.length > 0) {
+        challan.books.forEach((book) => {
+          // Check if we already have a stock entry for this book
+          const stockEntry = stock.find(
+            (s) => s.bookId === book.bookId && s.type === "BLOCK",
+          );
+          const receivedQuantity = stockEntry ? stockEntry.quantity : 0;
 
-      if (approvedReqs.length > 0) {
-        const totalRequisitioned = approvedReqs.reduce(
-          (sum, req) => sum + req.quantity,
-          0,
-        );
-
-        // Get received quantity from stock data
-        const stockEntry = stock.find(
-          (s) => s.bookId === bookId && s.type === "STATE",
-        );
-        const totalReceived = stockEntry ? stockEntry.quantity : 0;
-
-        const book = approvedReqs[0].book;
-
-        receivedItems.push({
-          id: bookId,
-          class: book.class,
-          bookName: book.title,
-          bookId: book.id,
-          medium: book.category || "General", // Use category as medium or default
-          requisitioned: totalRequisitioned,
-          received: totalReceived,
+          receivedItems.push({
+            id: `${challan.id}-${book.id}`,
+            challanNo: challan.challanNo,
+            bookName: book.bookName,
+            bookId: book.bookId,
+            class: book.className,
+            subject: book.subject,
+            totalQuantity: book.totalQuantity,
+            received: receivedQuantity,
+          });
         });
       }
     });
@@ -264,67 +221,53 @@ export default function StateReceivedItems({
     return receivedItems;
   };
 
-  const handleClassChange = (value: string) => {
-    setSelectedClass(value);
-    setSelectedBookName(null);
+  const handleChallanChange = (value: string) => {
+    setSelectedChallanNo(value);
+    setSelectedBook(null);
     setStockEntryData({
-      class: value,
+      challanNo: value,
       bookName: "",
       bookId: "",
-      medium: "",
-      requisitioned: 0,
+      class: "",
+      subject: "",
+      totalQuantity: 0,
       received: 0,
       left: 0,
     });
   };
 
-  const handleBookNameChange = (value: string) => {
-    setSelectedBookName(value);
-    const filteredBooks = getFilteredBooks();
-    const selectedBook = filteredBooks.find((book) => book.title === value);
+  const handleBookChange = (value: string) => {
+    const booksFromChallan = getBooksFromSelectedChallan();
+    const book = booksFromChallan.find((b) => b.bookName === value);
 
-    if (selectedBook) {
-      // Find corresponding requisitions for this book - try approved first, then all
-      let bookRequisitions = requisitions.filter(
-        (req) =>
-          req.bookId === selectedBook.id &&
-          (req.status === "APPROVED" || req.status === "COMPLETED"),
-      );
-
-      // If no approved requisitions, use all requisitions for this book
-      if (bookRequisitions.length === 0) {
-        bookRequisitions = requisitions.filter(
-          (req) => req.bookId === selectedBook.id,
-        );
-      }
-
-      const totalRequisitioned = bookRequisitions.reduce(
-        (sum, req) => sum + req.quantity,
-        0,
-      );
+    if (book) {
+      setSelectedBook(book);
 
       // Check if there's existing stock for this book
       const existingStock = stockData.find(
-        (stock) => stock.bookId === selectedBook.id && stock.type === "STATE",
+        (stock) => stock.bookId === book.bookId && stock.type === "BLOCK",
       );
       const currentReceived = existingStock ? existingStock.quantity : 0;
 
       setStockEntryData({
-        class: selectedBook.class,
-        bookName: selectedBook.title,
-        bookId: selectedBook.id,
-        medium: selectedBook.category || "General", // Use category as medium or set default
-        requisitioned: totalRequisitioned,
+        challanNo: selectedChallanNo || "",
+        bookName: book.bookName,
+        bookId: book.bookId,
+        class: book.className,
+        subject: book.subject,
+        totalQuantity: book.totalQuantity,
         received: currentReceived,
-        left: totalRequisitioned - currentReceived,
+        left: book.totalQuantity - currentReceived,
       });
     } else {
+      setSelectedBook(null);
       setStockEntryData({
-        class: selectedClass || "",
+        challanNo: selectedChallanNo || "",
         bookName: value,
         bookId: "",
-        medium: "",
-        requisitioned: 0,
+        class: "",
+        subject: "",
+        totalQuantity: 0,
         received: 0,
         left: 0,
       });
@@ -333,20 +276,20 @@ export default function StateReceivedItems({
 
   const handleStockReceivedChange = (value: string) => {
     const num = Math.max(0, Number(value.replace(/[^0-9]/g, "")));
-    const maxAllowed = stockEntryData.requisitioned;
-    const finalNum = Math.min(num, maxAllowed); // Don't allow more than requisitioned
+    const maxAllowed = stockEntryData.totalQuantity;
+    const finalNum = Math.min(num, maxAllowed);
 
     setStockEntryData((prev) => ({
       ...prev,
       received: finalNum,
-      left: prev.requisitioned - finalNum,
+      left: prev.totalQuantity - finalNum,
     }));
   };
 
   const handleSaveStockEntry = async () => {
     if (
-      !selectedClass ||
-      !selectedBookName ||
+      !selectedChallanNo ||
+      !selectedBook ||
       !stockEntryData.bookId ||
       stockEntryData.received === null ||
       stockEntryData.received === 0
@@ -354,17 +297,17 @@ export default function StateReceivedItems({
       toast({
         title: "Validation Error",
         description:
-          "Please select a Class, Book Name, and enter a valid Received quantity.",
+          "Please select a Challan No, Book, and enter a valid Received quantity.",
         variant: "destructive",
       });
       return;
     }
 
-    if (stockEntryData.received > stockEntryData.requisitioned) {
+    if (stockEntryData.received > stockEntryData.totalQuantity) {
       toast({
         title: "Validation Error",
         description:
-          "Received quantity cannot be more than requisitioned quantity.",
+          "Received quantity cannot be more than total quantity in challan.",
         variant: "destructive",
       });
       return;
@@ -376,7 +319,7 @@ export default function StateReceivedItems({
       // Check if stock entry already exists for this book
       const existingStock = stockData.find(
         (stock) =>
-          stock.bookId === stockEntryData.bookId && stock.type === "STATE",
+          stock.bookId === stockEntryData.bookId && stock.type === "BLOCK",
       );
 
       if (existingStock) {
@@ -389,8 +332,8 @@ export default function StateReceivedItems({
         const stockEntry = {
           bookId: stockEntryData.bookId,
           quantity: stockEntryData.received,
-          userId: "STATE_ADMIN", // Default state admin user ID
-          type: "STATE",
+          userId: "BLOCK_ADMIN", // Default block admin user ID
+          type: "BLOCK",
         };
 
         await stockAPI.create(stockEntry);
@@ -398,7 +341,9 @@ export default function StateReceivedItems({
 
       // Update local state
       const existingIndex = receivedData.findIndex(
-        (data) => data.bookId === stockEntryData.bookId,
+        (data) =>
+          data.bookId === stockEntryData.bookId &&
+          data.challanNo === stockEntryData.challanNo,
       );
 
       if (existingIndex > -1) {
@@ -411,12 +356,13 @@ export default function StateReceivedItems({
         );
       } else {
         const newReceivedItem: ReceivedItem = {
-          id: stockEntryData.bookId,
-          class: stockEntryData.class,
+          id: `${selectedChallanNo}-${stockEntryData.bookId}`,
+          challanNo: stockEntryData.challanNo,
           bookName: stockEntryData.bookName,
           bookId: stockEntryData.bookId,
-          medium: stockEntryData.medium,
-          requisitioned: stockEntryData.requisitioned,
+          class: stockEntryData.class,
+          subject: stockEntryData.subject,
+          totalQuantity: stockEntryData.totalQuantity,
           received: stockEntryData.received,
         };
         setReceivedData((prev) => [...prev, newReceivedItem]);
@@ -424,21 +370,22 @@ export default function StateReceivedItems({
 
       // Refresh stock data to get the latest state
       try {
-        const stockResponse = await stockAPI.getStateStock();
+        const stockResponse = await stockAPI.getAll({ type: "BLOCK" });
         setStockData(stockResponse.data.data || []);
       } catch (refreshError) {
         console.warn("Failed to refresh stock data:", refreshError);
       }
 
       // Reset form
-      setSelectedClass(null);
-      setSelectedBookName(null);
+      setSelectedChallanNo(null);
+      setSelectedBook(null);
       setStockEntryData({
-        class: "",
+        challanNo: "",
         bookName: "",
         bookId: "",
-        medium: "",
-        requisitioned: 0,
+        class: "",
+        subject: "",
+        totalQuantity: 0,
         received: 0,
         left: 0,
       });
@@ -462,9 +409,9 @@ export default function StateReceivedItems({
   if (loading) {
     return (
       <AdminLayout
-        title="State Stock Received"
-        description="Loading state stock data..."
-        adminLevel={adminLevel || "STATE ADMIN"}
+        title="Block Books Received"
+        description="Loading block stock data..."
+        adminLevel={adminLevel || "BLOCK ADMIN"}
       >
         <div className="flex items-center justify-center min-h-[400px]">
           <Loader2 className="h-8 w-8 animate-spin" />
@@ -476,9 +423,9 @@ export default function StateReceivedItems({
 
   return (
     <AdminLayout
-      title="State Stock Received"
-      description="Manage books received at state level"
-      adminLevel={adminLevel || "STATE ADMIN"}
+      title="Block Books Received"
+      description="Manage books received at block level from eChallans"
+      adminLevel={adminLevel || "BLOCK ADMIN"}
     >
       {/* Statistics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -492,20 +439,20 @@ export default function StateReceivedItems({
             <div className="text-2xl font-bold text-green-900">
               {receivedData.reduce((sum, item) => sum + item.received, 0)}
             </div>
-            <p className="text-xs text-green-700">across all classes</p>
+            <p className="text-xs text-green-700">across all eChallans</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-blue-100 to-blue-50 border-blue-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Total Requisitioned
+              Total in eChallans
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold text-blue-900">
-              {receivedData.reduce((sum, item) => sum + item.requisitioned, 0)}
+              {receivedData.reduce((sum, item) => sum + item.totalQuantity, 0)}
             </div>
-            <p className="text-xs text-blue-700">books requested</p>
+            <p className="text-xs text-blue-700">books available</p>
           </CardContent>
         </Card>
         <Card className="bg-gradient-to-br from-yellow-100 to-yellow-50 border-yellow-300">
@@ -517,7 +464,7 @@ export default function StateReceivedItems({
           <CardContent>
             <div className="text-2xl font-bold text-yellow-900">
               {receivedData.reduce(
-                (sum, item) => sum + (item.requisitioned - item.received),
+                (sum, item) => sum + (item.totalQuantity - item.received),
                 0,
               )}
             </div>
@@ -525,53 +472,52 @@ export default function StateReceivedItems({
           </CardContent>
         </Card>
       </div>
-
       {/* Stock Entry Card */}
       <Card className="w-full max-w-5xl mx-auto mb-8 bg-gradient-to-br from-blue-100 to-blue-50 border-blue-300">
         <CardHeader>
           <CardTitle className="text-lg text-blue-900">Stock Entry</CardTitle>
           <CardDescription>
-            Enter details for books received at state level.
+            Enter details for books received from eChallans at block level.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Class
+                eChallan No
               </label>
               <Select
-                onValueChange={handleClassChange}
-                value={selectedClass || ""}
+                onValueChange={handleChallanChange}
+                value={selectedChallanNo || ""}
                 disabled={saving}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue
                     placeholder={
-                      getAvailableClasses().length === 0
-                        ? "No classes available"
-                        : "Select Class"
+                      getAvailableEChallans().length === 0
+                        ? "No eChallans available"
+                        : "Select eChallan No"
                     }
                   />
                 </SelectTrigger>
                 <SelectContent>
-                  {getAvailableClasses().length === 0 ? (
-                    <SelectItem value="no-classes" disabled>
-                      No approved requisitions found
+                  {getAvailableEChallans().length === 0 ? (
+                    <SelectItem value="no-challans" disabled>
+                      No delivered eChallans found
                     </SelectItem>
                   ) : (
-                    getAvailableClasses().map((cls) => (
-                      <SelectItem key={cls} value={cls}>
-                        Class {cls}
+                    getAvailableEChallans().map((challan) => (
+                      <SelectItem key={challan.id} value={challan.challanNo}>
+                        {challan.challanNo} - {challan.destinationName}
                       </SelectItem>
                     ))
                   )}
                 </SelectContent>
               </Select>
-              {getAvailableClasses().length === 0 && (
+              {getAvailableEChallans().length === 0 && (
                 <p className="text-xs text-red-500 mt-1">
-                  No classes available. Please ensure there are approved
-                  requisitions in the system.
+                  No eChallans available. Please ensure there are delivered
+                  eChallans to your block.
                 </p>
               )}
             </div>
@@ -580,17 +526,17 @@ export default function StateReceivedItems({
                 Book Name
               </label>
               <Select
-                onValueChange={handleBookNameChange}
-                value={selectedBookName || ""}
-                disabled={!selectedClass || saving}
+                onValueChange={handleBookChange}
+                value={selectedBook?.bookName || ""}
+                disabled={!selectedChallanNo || saving}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select Book Name" />
                 </SelectTrigger>
                 <SelectContent>
-                  {getFilteredBooks().map((book) => (
-                    <SelectItem key={book.id} value={book.title}>
-                      {book.title}
+                  {getBooksFromSelectedChallan().map((book) => (
+                    <SelectItem key={book.id} value={book.bookName}>
+                      {book.bookName} (Class {book.className})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -598,22 +544,33 @@ export default function StateReceivedItems({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Medium
+                Class
               </label>
               <Input
                 type="text"
-                value={stockEntryData.medium}
+                value={stockEntryData.class}
                 readOnly
                 className="bg-gray-100"
               />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Requisition Asked
+                Subject
+              </label>
+              <Input
+                type="text"
+                value={stockEntryData.subject}
+                readOnly
+                className="bg-gray-100"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total Quantity in eChallan
               </label>
               <Input
                 type="number"
-                value={stockEntryData.requisitioned}
+                value={stockEntryData.totalQuantity}
                 readOnly
                 className="bg-gray-100"
               />
@@ -627,14 +584,14 @@ export default function StateReceivedItems({
                 value={stockEntryData.received}
                 onChange={(e) => handleStockReceivedChange(e.target.value)}
                 min="0"
-                max={stockEntryData.requisitioned}
+                max={stockEntryData.totalQuantity}
                 className="border-green-300 focus:border-green-500"
-                placeholder={`Enter quantity (max: ${stockEntryData.requisitioned})`}
+                placeholder={`Enter quantity (max: ${stockEntryData.totalQuantity})`}
                 disabled={saving}
               />
-              {stockEntryData.requisitioned > 0 && (
+              {stockEntryData.totalQuantity > 0 && (
                 <p className="text-xs text-gray-500 mt-1">
-                  Maximum allowed: {stockEntryData.requisitioned}
+                  Maximum allowed: {stockEntryData.totalQuantity}
                 </p>
               )}
             </div>
@@ -679,7 +636,7 @@ export default function StateReceivedItems({
             Books Received
           </CardTitle>
           <CardDescription>
-            Overview of all books received at state level
+            Overview of all books received at block level from eChallans
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -692,15 +649,18 @@ export default function StateReceivedItems({
               <table className="min-w-full bg-white rounded-lg">
                 <thead className="bg-gradient-to-r from-purple-200 to-pink-200">
                   <tr>
+                    <th className="py-3 px-4 text-left font-semibold">
+                      eChallan No
+                    </th>
                     <th className="py-3 px-4 text-left font-semibold">Class</th>
                     <th className="py-3 px-4 text-left font-semibold">
                       Book Name
                     </th>
                     <th className="py-3 px-4 text-left font-semibold">
-                      Medium
+                      Subject
                     </th>
                     <th className="py-3 px-4 text-left font-semibold">
-                      Requisitioned
+                      Total in eChallan
                     </th>
                     <th className="py-3 px-4 text-left font-semibold">
                       Received
@@ -720,20 +680,21 @@ export default function StateReceivedItems({
                           : "bg-white"
                       }
                     >
+                      <td className="py-3 px-4">{book.challanNo}</td>
                       <td className="py-3 px-4">Class {book.class}</td>
                       <td className="py-3 px-4">{book.bookName}</td>
-                      <td className="py-3 px-4">{book.medium}</td>
-                      <td className="py-3 px-4">{book.requisitioned}</td>
+                      <td className="py-3 px-4">{book.subject}</td>
+                      <td className="py-3 px-4">{book.totalQuantity}</td>
                       <td className="py-3 px-4">{book.received}</td>
                       <td className="py-3 px-4">
                         <div className="flex items-center space-x-2">
                           <Progress
-                            value={(book.received / book.requisitioned) * 100}
+                            value={(book.received / book.totalQuantity) * 100}
                             className="flex-1"
                           />
                           <span className="text-sm text-gray-600">
                             {Math.round(
-                              (book.received / book.requisitioned) * 100,
+                              (book.received / book.totalQuantity) * 100,
                             )}
                             %
                           </span>

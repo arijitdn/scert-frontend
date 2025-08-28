@@ -6,25 +6,40 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   User,
-  Mail,
   Phone,
   BadgeCheck,
-  Lock,
   School,
   Building2,
-  ShieldCheck,
   Edit2,
   Save,
   Plus,
+  Loader2,
+  Trash2,
+  AlertCircle,
+  Users,
+  MapPin,
+  BookOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useSchoolData } from "@/hooks/useSchoolData";
 
 export default function SchoolProfile() {
+  const SCHOOL_UDISE = "16010100108"; // The specific UDISE we want to show
+
+  const {
+    school,
+    enrollments,
+    loading,
+    error,
+    updateEnrollment,
+    deleteEnrollment,
+    refreshData,
+  } = useSchoolData({ udise: SCHOOL_UDISE });
+
   const [editing, setEditing] = useState(false);
   const [headmasterName, setHeadmasterName] = useState("Amit Verma");
   const [headmasterId, setHeadmasterId] = useState("HM12345");
@@ -39,34 +54,12 @@ export default function SchoolProfile() {
   const [tempEmail, setTempEmail] = useState(email);
   const [tempPhone, setTempPhone] = useState(phone);
 
-  // Dummy data for class student counts
-  const initialClassStudentCounts = [
-    { className: "Class 1", studentCount: 30 },
-    { className: "Class 2", studentCount: 28 },
-    { className: "Class 3", studentCount: 32 },
-    { className: "Class 4", studentCount: 27 },
-    { className: "Class 5", studentCount: 25 },
-  ];
-  const [classStudentCounts, setClassStudentCounts] = useState(
-    initialClassStudentCounts,
-  );
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editValue, setEditValue] = useState(0);
   const [addingClass, setAddingClass] = useState(false);
   const [newClassName, setNewClassName] = useState("");
   const [newClassCount, setNewClassCount] = useState(0);
-
-  const [editingSchoolDetails, setEditingSchoolDetails] = useState(false);
-  const [district, setDistrict] = useState("WEST TRIPURA");
-  const [block, setBlock] = useState("AGARTALA MUNICIPAL COORPORATION");
-  const [managedBy, setManagedBy] = useState("State Govt. Managed");
-  const [category, setCategory] = useState("Pr. with Up.Pr. sec. and H.Sec.");
-  const [type, setType] = useState("Co-ed");
-  const [tempDistrict, setTempDistrict] = useState(district);
-  const [tempBlock, setTempBlock] = useState(block);
-  const [tempManagedBy, setTempManagedBy] = useState(managedBy);
-  const [tempCategory, setTempCategory] = useState(category);
-  const [tempType, setTempType] = useState(type);
+  const [enrollmentLoading, setEnrollmentLoading] = useState(false);
 
   const handleEdit = () => {
     setTempName(headmasterName);
@@ -92,387 +85,566 @@ export default function SchoolProfile() {
     setEditing(false);
   };
 
-  // Rename the handlers for the student/class table to avoid conflict
+  // Class enrollment handlers
   const handleClassEdit = (idx: number) => {
     setEditIdx(idx);
-    setEditValue(classStudentCounts[idx].studentCount);
-  };
-  const handleClassSave = (idx: number) => {
-    setClassStudentCounts((prev) =>
-      prev.map((item, i) =>
-        i === idx ? { ...item, studentCount: editValue } : item,
-      ),
-    );
-    setEditIdx(null);
-  };
-  const handleAddClass = () => {
-    if (!newClassName.trim()) return;
-    setClassStudentCounts((prev) => [
-      ...prev,
-      { className: newClassName.trim(), studentCount: newClassCount },
-    ]);
-    setNewClassName("");
-    setNewClassCount(0);
-    setAddingClass(false);
+    setEditValue(enrollments[idx].students);
   };
 
-  const handleEditSchoolDetails = () => {
-    setTempDistrict(district);
-    setTempBlock(block);
-    setTempManagedBy(managedBy);
-    setTempCategory(category);
-    setTempType(type);
-    setEditingSchoolDetails(true);
+  const handleClassSave = async (idx: number) => {
+    if (!enrollments[idx]) return;
+
+    setEnrollmentLoading(true);
+    const success = await updateEnrollment(enrollments[idx].class, editValue);
+    if (success) {
+      setEditIdx(null);
+    }
+    setEnrollmentLoading(false);
   };
-  const handleCancelSchoolDetails = () => {
-    setEditingSchoolDetails(false);
+
+  const handleClassCancel = () => {
+    setEditIdx(null);
   };
-  const handleSaveSchoolDetails = () => {
-    setDistrict(tempDistrict);
-    setBlock(tempBlock);
-    setManagedBy(tempManagedBy);
-    setCategory(tempCategory);
-    setType(tempType);
-    setEditingSchoolDetails(false);
+
+  const handleAddClass = async () => {
+    if (!newClassName.trim() || newClassCount < 0) return;
+
+    setEnrollmentLoading(true);
+    const success = await updateEnrollment(newClassName.trim(), newClassCount);
+    if (success) {
+      setAddingClass(false);
+      setNewClassName("");
+      setNewClassCount(0);
+    }
+    setEnrollmentLoading(false);
   };
+
+  const handleDeleteClass = async (enrollmentId: string) => {
+    if (confirm("Are you sure you want to delete this class enrollment?")) {
+      setEnrollmentLoading(true);
+      await deleteEnrollment(enrollmentId);
+      setEnrollmentLoading(false);
+    }
+  };
+
+  const totalStudents = enrollments.reduce(
+    (sum, enrollment) => sum + enrollment.students,
+    0,
+  );
+
+  if (loading) {
+    return (
+      <AdminLayout
+        title="School Profile"
+        description="Manage your school information and class enrollments"
+        adminLevel="SCHOOL ADMIN"
+      >
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-blue-500" />
+            <p className="text-gray-600">Loading school data...</p>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (error) {
+    return (
+      <AdminLayout
+        title="School Profile"
+        description="Manage your school information and class enrollments"
+        adminLevel="SCHOOL ADMIN"
+      >
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+            <h3 className="text-lg font-semibold text-red-800 mb-2">
+              Error Loading School Data
+            </h3>
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button onClick={refreshData} variant="outline">
+              Try Again
+            </Button>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout
       title="School Profile"
-      description="Manage school and contact person details"
+      description="Manage your school information and class enrollments"
       adminLevel="SCHOOL ADMIN"
     >
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-1 space-y-8">
-          <Card className="shadow-lg border-primary/20">
-            <CardHeader className="text-center">
-              <Avatar className="w-24 h-24 mx-auto mb-4 ring-4 ring-primary/30 shadow-lg">
-                <AvatarImage src="/profile.png" alt="Profile" />
-                <AvatarFallback>
-                  <User className="w-12 h-12" />
-                </AvatarFallback>
-              </Avatar>
-              <CardTitle className="text-2xl font-bold text-primary">
-                Umakanta Academy
-              </CardTitle>
-              <CardDescription>Udise Code: 1601010003</CardDescription>
-            </CardHeader>
-          </Card>
+      <div className="space-y-8">
+        {/* School Information Card */}
+        <Card className="bg-gradient-to-br from-blue-100 to-purple-50 border-blue-300">
+          <CardHeader>
+            <CardTitle className="text-lg text-blue-900 flex items-center gap-2">
+              <School className="h-5 w-5" />
+              School Information
+            </CardTitle>
+            <CardDescription>
+              Basic information about {school?.name || "your school"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <School className="h-4 w-4" />
+                  School Name
+                </label>
+                <p className="text-lg font-semibold text-gray-900">
+                  {school?.name || "N/A"}
+                </p>
+              </div>
 
-          <Card className="shadow-lg border-primary/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <School className="w-6 h-6 text-orange-500" /> School Details
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <BadgeCheck className="h-4 w-4" />
+                  UDISE Code
+                </label>
+                <p className="text-lg font-semibold text-gray-900">
+                  {school?.udise || "N/A"}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <MapPin className="h-4 w-4" />
+                  District
+                </label>
+                <p className="text-lg font-semibold text-gray-900">
+                  {school?.district || "N/A"}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <Building2 className="h-4 w-4" />
+                  Block
+                </label>
+                <p className="text-lg font-semibold text-gray-900">
+                  {school?.block_name || "N/A"}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Management
+                </label>
+                <p className="text-lg font-semibold text-gray-900">
+                  {school?.management || "N/A"}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Category
+                </label>
+                <p className="text-lg font-semibold text-gray-900">
+                  {school?.category || "N/A"}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Type
+                </label>
+                <p className="text-lg font-semibold text-gray-900">
+                  {school?.type || "N/A"}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Total Students
+                </label>
+                <p className="text-lg font-semibold text-blue-600">
+                  {totalStudents}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <BookOpen className="h-4 w-4" />
+                  Classes
+                </label>
+                <p className="text-lg font-semibold text-green-600">
+                  {enrollments.length}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Contact Information Card */}
+        <Card className="bg-gradient-to-br from-green-100 to-blue-50 border-green-300">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-lg text-green-900 flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Contact Information
               </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm">
-              <div className="flex items-center gap-3">
-                <Building2 className="w-5 h-5 text-muted-foreground" />
+              <CardDescription>
+                School administrator contact details
+              </CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={editing ? handleCancel : handleEdit}
+              className="flex items-center gap-2"
+            >
+              {editing ? (
+                <>Cancel</>
+              ) : (
+                <>
+                  <Edit2 className="h-4 w-4" />
+                  Edit
+                </>
+              )}
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
                 <div>
-                  <p className="font-semibold">District</p>
-                  {editingSchoolDetails ? (
+                  <label className="text-sm font-medium text-gray-700">
+                    Headmaster Name
+                  </label>
+                  {editing ? (
                     <Input
-                      value={tempDistrict}
-                      onChange={(e) => setTempDistrict(e.target.value)}
+                      value={tempName}
+                      onChange={(e) => setTempName(e.target.value)}
+                      className="mt-1"
                     />
                   ) : (
-                    <p className="text-muted-foreground">{district}</p>
+                    <p className="mt-1 text-lg text-gray-900">
+                      {headmasterName}
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Designation
+                  </label>
+                  {editing ? (
+                    <Input
+                      value={tempDesignation}
+                      onChange={(e) => setTempDesignation(e.target.value)}
+                      className="mt-1"
+                    />
+                  ) : (
+                    <p className="mt-1 text-lg text-gray-900">{designation}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Email
+                  </label>
+                  {editing ? (
+                    <Input
+                      type="email"
+                      value={tempEmail}
+                      onChange={(e) => setTempEmail(e.target.value)}
+                      className="mt-1"
+                    />
+                  ) : (
+                    <p className="mt-1 text-lg text-gray-900">{email}</p>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <User className="w-5 h-5 text-muted-foreground" />
+
+              <div className="space-y-4">
                 <div>
-                  <p className="font-semibold">Block</p>
-                  {editingSchoolDetails ? (
+                  <label className="text-sm font-medium text-gray-700">
+                    Admin ID
+                  </label>
+                  {editing ? (
                     <Input
-                      value={tempBlock}
-                      onChange={(e) => setTempBlock(e.target.value)}
+                      value={tempId}
+                      onChange={(e) => setTempId(e.target.value)}
+                      className="mt-1"
                     />
                   ) : (
-                    <p className="text-muted-foreground">{block}</p>
+                    <p className="mt-1 text-lg text-gray-900">{headmasterId}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Phone
+                  </label>
+                  {editing ? (
+                    <Input
+                      value={tempPhone}
+                      onChange={(e) => setTempPhone(e.target.value)}
+                      className="mt-1"
+                    />
+                  ) : (
+                    <p className="mt-1 text-lg text-gray-900">{phone}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Password
+                  </label>
+                  {editing ? (
+                    <Input
+                      type="password"
+                      value={tempPassword}
+                      onChange={(e) => setTempPassword(e.target.value)}
+                      className="mt-1"
+                    />
+                  ) : (
+                    <p className="mt-1 text-lg text-gray-900">••••••••</p>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <ShieldCheck className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <p className="font-semibold">Managed by</p>
-                  {editingSchoolDetails ? (
-                    <Input
-                      value={tempManagedBy}
-                      onChange={(e) => setTempManagedBy(e.target.value)}
-                    />
-                  ) : (
-                    <p className="text-muted-foreground">{managedBy}</p>
-                  )}
-                </div>
+            </div>
+
+            {editing && (
+              <div className="flex justify-end gap-2 mt-6">
+                <Button variant="outline" onClick={handleCancel}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSave}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="h-4 w-4" />
+                  Save Changes
+                </Button>
               </div>
-              <div className="flex items-center gap-3">
-                <User className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <p className="font-semibold">Category</p>
-                  {editingSchoolDetails ? (
-                    <Input
-                      value={tempCategory}
-                      onChange={(e) => setTempCategory(e.target.value)}
-                    />
-                  ) : (
-                    <p className="text-muted-foreground">{category}</p>
-                  )}
-                </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Class Enrollments Card */}
+        <Card className="bg-gradient-to-br from-purple-100 to-pink-50 border-purple-300">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-lg text-purple-900 flex items-center gap-2">
+                <Users className="h-5 w-5" />
+                Class Enrollments
+              </CardTitle>
+              <CardDescription>
+                Manage student count for each class - this determines your
+                requisition limits
+              </CardDescription>
+            </div>
+            <Button
+              onClick={() => setAddingClass(true)}
+              size="sm"
+              className="flex items-center gap-2"
+              disabled={addingClass || enrollmentLoading}
+            >
+              <Plus className="h-4 w-4" />
+              Add Class
+            </Button>
+          </CardHeader>
+          <CardContent>
+            {enrollmentLoading && (
+              <div className="flex items-center gap-2 mb-4 p-2 bg-blue-50 rounded-md">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm text-blue-700">
+                  Updating enrollments...
+                </span>
               </div>
-              <div className="flex items-center gap-3">
-                <User className="w-5 h-5 text-muted-foreground" />
-                <div>
-                  <p className="font-semibold">Type</p>
-                  {editingSchoolDetails ? (
-                    <Input
-                      value={tempType}
-                      onChange={(e) => setTempType(e.target.value)}
-                    />
-                  ) : (
-                    <p className="text-muted-foreground">{type}</p>
-                  )}
-                </div>
-              </div>
-              {editingSchoolDetails ? (
-                <div className="flex gap-2 mt-4">
-                  <Button onClick={handleSaveSchoolDetails} className="w-full">
-                    Save
+            )}
+
+            <div className="space-y-4">
+              {addingClass && (
+                <div className="flex gap-2 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                  <Input
+                    placeholder="Class name (e.g., Class 1)"
+                    value={newClassName}
+                    onChange={(e) => setNewClassName(e.target.value)}
+                    className="flex-1"
+                  />
+                  <Input
+                    type="number"
+                    placeholder="Student count"
+                    value={newClassCount}
+                    onChange={(e) =>
+                      setNewClassCount(parseInt(e.target.value) || 0)
+                    }
+                    min="0"
+                    className="w-32"
+                  />
+                  <Button
+                    onClick={handleAddClass}
+                    disabled={
+                      !newClassName.trim() ||
+                      newClassCount < 0 ||
+                      enrollmentLoading
+                    }
+                    size="sm"
+                  >
+                    Add
                   </Button>
                   <Button
-                    variant="secondary"
-                    onClick={handleCancelSchoolDetails}
-                    className="w-full"
+                    onClick={() => {
+                      setAddingClass(false);
+                      setNewClassName("");
+                      setNewClassCount(0);
+                    }}
+                    variant="outline"
+                    size="sm"
                   >
                     Cancel
                   </Button>
                 </div>
-              ) : (
-                <Button
-                  className="mt-4 w-full"
-                  onClick={handleEditSchoolDetails}
-                >
-                  Edit School Details
-                </Button>
               )}
-            </CardContent>
-          </Card>
-        </div>
 
-        <div className="lg:col-span-2 space-y-8">
-          <Card className="shadow-lg border-primary/20">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <BadgeCheck className="w-6 h-6 text-orange-500" /> Contact
-                Person
-              </CardTitle>
-              {editing ? (
-                <div className="flex gap-2">
-                  <Button variant="secondary" onClick={handleCancel}>
-                    Cancel
-                  </Button>
-                  <Button onClick={handleSave}>Save</Button>
+              {enrollments.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Users className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p className="text-lg font-medium mb-2">
+                    No class enrollments found
+                  </p>
+                  <p className="text-sm">
+                    Add class enrollments to enable book requisitions
+                  </p>
                 </div>
               ) : (
-                <Button variant="outline" onClick={handleEdit}>
-                  <Edit2 className="w-4 h-4 mr-2" />
-                  Edit
-                </Button>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border border-purple-200">
+                    <thead>
+                      <tr className="bg-purple-100">
+                        <th className="border border-purple-200 px-4 py-2 text-left text-purple-900 font-semibold">
+                          Class
+                        </th>
+                        <th className="border border-purple-200 px-4 py-2 text-left text-purple-900 font-semibold">
+                          Students
+                        </th>
+                        <th className="border border-purple-200 px-4 py-2 text-left text-purple-900 font-semibold">
+                          Max Books per Subject
+                        </th>
+                        <th className="border border-purple-200 px-4 py-2 text-center text-purple-900 font-semibold">
+                          Actions
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {enrollments.map((enrollment, idx) => (
+                        <tr
+                          key={enrollment.id}
+                          className="bg-white hover:bg-purple-50"
+                        >
+                          <td className="border border-purple-200 px-4 py-2 font-medium">
+                            {enrollment.class}
+                          </td>
+                          <td className="border border-purple-200 px-4 py-2">
+                            {editIdx === idx ? (
+                              <Input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) =>
+                                  setEditValue(parseInt(e.target.value) || 0)
+                                }
+                                min="0"
+                                className="w-24"
+                              />
+                            ) : (
+                              <span className="text-blue-600 font-semibold">
+                                {enrollment.students}
+                              </span>
+                            )}
+                          </td>
+                          <td className="border border-purple-200 px-4 py-2 text-green-600 font-semibold">
+                            {editIdx === idx ? editValue : enrollment.students}
+                          </td>
+                          <td className="border border-purple-200 px-4 py-2 text-center">
+                            {editIdx === idx ? (
+                              <div className="flex gap-1 justify-center">
+                                <Button
+                                  onClick={() => handleClassSave(idx)}
+                                  size="sm"
+                                  disabled={enrollmentLoading}
+                                >
+                                  {enrollmentLoading ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Save className="h-3 w-3" />
+                                  )}
+                                </Button>
+                                <Button
+                                  onClick={handleClassCancel}
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={enrollmentLoading}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            ) : (
+                              <div className="flex gap-1 justify-center">
+                                <Button
+                                  onClick={() => handleClassEdit(idx)}
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={enrollmentLoading}
+                                >
+                                  <Edit2 className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                  onClick={() =>
+                                    handleDeleteClass(enrollment.id)
+                                  }
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700"
+                                  disabled={enrollmentLoading}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
-            </CardHeader>
-            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-muted-foreground">
-                  Name
-                </label>
-                {editing ? (
-                  <Input
-                    value={tempName}
-                    onChange={(e) => setTempName(e.target.value)}
-                  />
-                ) : (
-                  <p>{headmasterName}</p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-muted-foreground">
-                  Designation
-                </label>
-                {editing ? (
-                  <Input
-                    value={tempDesignation}
-                    onChange={(e) => setTempDesignation(e.target.value)}
-                  />
-                ) : (
-                  <p>{designation}</p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-muted-foreground">
-                  Email
-                </label>
-                {editing ? (
-                  <Input
-                    value={tempEmail}
-                    onChange={(e) => setTempEmail(e.target.value)}
-                  />
-                ) : (
-                  <p>{email}</p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-muted-foreground">
-                  Phone
-                </label>
-                {editing ? (
-                  <Input
-                    value={tempPhone}
-                    onChange={(e) => setTempPhone(e.target.value)}
-                  />
-                ) : (
-                  <p>{phone}</p>
-                )}
-              </div>
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-muted-foreground">
-                  Password
-                </label>
-                {editing ? (
-                  <Input
-                    type="password"
-                    value={tempPassword}
-                    onChange={(e) => setTempPassword(e.target.value)}
-                  />
-                ) : (
-                  <p>••••••••</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
 
-          <Card className="shadow-lg border-primary/20">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <School className="w-6 h-6 text-orange-500" /> Class Enrollment
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <table className="min-w-full border rounded-lg bg-white">
-                  <thead>
-                    <tr className="bg-orange-100">
-                      <th className="px-4 py-3 text-left text-sm font-semibold">
-                        Class
-                      </th>
-                      <th className="px-4 py-3 text-left text-sm font-semibold">
-                        Students
-                      </th>
-                      <th className="px-4 py-3 w-24"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {classStudentCounts.map((cls, idx) => (
-                      <tr
-                        key={cls.className}
-                        className="border-b hover:bg-gray-50"
-                      >
-                        <td className="px-4 py-2">{cls.className}</td>
-                        <td className="px-4 py-2">
-                          {editIdx === idx ? (
-                            <Input
-                              type="number"
-                              min={0}
-                              value={editValue}
-                              onChange={(e) =>
-                                setEditValue(
-                                  Math.max(0, parseInt(e.target.value) || 0),
-                                )
-                              }
-                              className="w-24 h-8"
-                            />
-                          ) : (
-                            cls.studentCount
-                          )}
-                        </td>
-                        <td className="px-4 py-2 text-right">
-                          {editIdx === idx ? (
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              onClick={() => handleClassSave(idx)}
-                              title="Save"
-                            >
-                              <Save className="w-4 h-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => handleClassEdit(idx)}
-                              title="Edit"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                    {addingClass && (
-                      <tr>
-                        <td className="px-4 py-2">
-                          <Input
-                            placeholder="Class Name"
-                            value={newClassName}
-                            onChange={(e) => setNewClassName(e.target.value)}
-                            className="w-32 h-8"
-                          />
-                        </td>
-                        <td className="px-4 py-2">
-                          <Input
-                            type="number"
-                            min={0}
-                            value={newClassCount}
-                            onChange={(e) =>
-                              setNewClassCount(
-                                Math.max(0, parseInt(e.target.value) || 0),
-                              )
-                            }
-                            className="w-24 h-8"
-                          />
-                        </td>
-                        <td className="px-4 py-2 flex gap-2">
-                          <Button size="sm" onClick={handleAddClass}>
-                            <Save className="w-4 h-4 mr-1" />
-                            Save
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setAddingClass(false)}
-                          >
-                            Cancel
-                          </Button>
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-                {!addingClass && (
-                  <div className="mt-4">
-                    <Button
-                      variant="ghost"
-                      onClick={() => setAddingClass(true)}
-                    >
-                      <Plus className="w-4 h-4 mr-2" /> Add Class
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+              {enrollments.length > 0 && (
+                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-semibold text-blue-900 mb-2">
+                    Requisition Guidelines:
+                  </h4>
+                  <ul className="text-sm text-blue-700 space-y-1">
+                    <li>
+                      • The number of students in each class determines the
+                      maximum books you can requisition
+                    </li>
+                    <li>
+                      • You cannot request more books than the enrolled student
+                      count for any subject
+                    </li>
+                    <li>
+                      • Update enrollments regularly to ensure accurate
+                      requisition limits
+                    </li>
+                    <li>
+                      • Total students across all classes:{" "}
+                      <strong>{totalStudents}</strong>
+                    </li>
+                  </ul>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </AdminLayout>
   );

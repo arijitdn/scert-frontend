@@ -17,6 +17,7 @@ import RegistrationOfBooks from "./pages/admin/RegistrationOfBooks";
 import StateReceivedItems from "./pages/admin/StateReceivedItems";
 
 import Issues from "./pages/admin/Issues";
+import SchoolIssues from "./pages/admin/SchoolIssues";
 import Notifications from "./pages/admin/Notifications";
 import Requisition from "./pages/admin/Requisition";
 import SchoolLoginCredentials from "./pages/admin/SchoolLoginCredentials";
@@ -59,6 +60,8 @@ import BlockBacklogEntry from "./pages/admin/BlockBacklogEntry";
 import SchoolBacklogEntry from "./pages/admin/SchoolBacklogEntry";
 import ChartsVisualization from "./pages/admin/ChartsVisualization";
 import EditProfile from "./pages/admin/EditProfile";
+import DistrictReceived from "./pages/admin/DistrictReceived";
+import BlockReceived from "./pages/admin/BlockReceived";
 
 const queryClient = new QueryClient();
 
@@ -137,6 +140,10 @@ const App = () => (
             element={<DistrictEChallan />}
           />
           <Route
+            path="/admin/district/received"
+            element={<DistrictReceived adminLevel="district" />}
+          />
+          <Route
             path="/admin/district/backlog-entry"
             element={<DistrictBacklogEntry />}
           />
@@ -158,6 +165,10 @@ const App = () => (
           <Route
             path="/admin/block/requisition"
             element={<BlockRequisition />}
+          />
+          <Route
+            path="/admin/block/received"
+            element={<BlockReceived adminLevel="block" />}
           />
           <Route
             path="/admin/block/notifications"
@@ -200,7 +211,7 @@ const App = () => (
             path="/admin/school/distribute"
             element={<SchoolDistribute />}
           />
-          <Route path="/admin/school/issues" element={<Issues />} />
+          <Route path="/admin/school/issues" element={<SchoolIssues />} />
           <Route path="/admin/school/profile" element={<SchoolProfile />} />
           <Route
             path="/admin/school/backlog-entry"

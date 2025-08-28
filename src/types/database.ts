@@ -48,7 +48,22 @@ export interface School {
   block_code: string;
   district_code: string;
   state_id: string;
+  category: string;
+  block_name: string;
+  district: string;
+  management: string;
+  type: string;
   createdAt?: string;
+  ClassEnrollment?: ClassEnrollment[];
+}
+
+export interface ClassEnrollment {
+  id: string;
+  school_id: string;
+  class: string;
+  students: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Stock {
@@ -66,10 +81,13 @@ export interface StockWithBook extends Stock {
 }
 
 export type RequisitionStatus =
-  | "PENDING"
+  | "PENDING_BLOCK_APPROVAL"
+  | "PENDING_DISTRICT_APPROVAL"
   | "APPROVED"
   | "COMPLETED"
-  | "REJECTED";
+  | "REJECTED_BY_BLOCK"
+  | "REJECTED_BY_DISTRICT"
+  | "REJECTED_BY_STATE";
 
 export interface Requisition {
   id: string;

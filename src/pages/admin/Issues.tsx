@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import {
   Card,
@@ -7,15 +8,8 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
-import {
-  AlertTriangle,
-  CheckCircle,
-  School,
-  User,
-  Building2,
-} from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectTrigger,
@@ -23,224 +17,639 @@ import {
   SelectItem,
   SelectValue,
 } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Plus,
+  Eye,
+  Filter,
+  RefreshCw,
+  AlertCircle,
+  Zap,
+  ArrowUp,
+  ArrowRight,
+  MessageSquare,
+} from "lucide-react";
 import { useParams } from "react-router-dom";
+import { issuesAPI } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { formatDistanceToNow } from "date-fns";
 
-const dummyIssues = [
-  {
-    id: 1,
-    source: "IS",
-    title: "Books not received",
-    description: "Books for Class 4 not received in time.",
-    date: "2024-06-01",
-    solved: false,
-  },
-  {
-    id: 2,
-    source: "DEO",
-    title: "Shortage of Science books",
-    description: "Science books for Class 5 are short in Mumbai district.",
-    date: "2024-05-28",
-    solved: false,
-  },
-  {
-    id: 3,
-    source: "School",
-    title: "Damaged books received",
-    description: "Some books received were damaged.",
-    date: "2024-05-25",
-    solved: true,
-  },
-];
+interface Issue {
+  id: string;
+  issueId: string;
+  title: string;
+  description: string;
+  priority: "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
+  status: string;
+  schoolId: string;
+  raisedBy: string;
+  currentLevel: "BLOCK" | "DISTRICT" | "STATE";
+  remarksByBlock?: string;
+  remarksByDistrict?: string;
+  remarksByState?: string;
+  createdAt: string;
+  updatedAt: string;
+  reviewedByBlockAt?: string;
+  reviewedByDistrictAt?: string;
+  reviewedByStateAt?: string;
+  resolvedAt?: string;
+  rejectedAt?: string;
+  school: {
+    id: string;
+    name: string;
+    udise: string;
+    block_name: string;
+    district: string;
+  };
+}
 
-const sourceIcons = {
-  IS: <User className="h-4 w-4 text-blue-500" />,
-  DEO: <Building2 className="h-4 w-4 text-green-500" />,
-  School: <School className="h-4 w-4 text-pink-500" />,
+const priorityColors = {
+  LOW: "bg-green-100 text-green-800",
+  MEDIUM: "bg-yellow-100 text-yellow-800",
+  HIGH: "bg-orange-100 text-orange-800",
+  CRITICAL: "bg-red-100 text-red-800",
 };
 
-const recipientOptions = [
-  { label: "District Education Officer (DEO)", value: "DEO" },
-  { label: "Inspection Staff (IS)", value: "IS" },
-  { label: "State", value: "STATE" },
-];
+const statusColors = {
+  PENDING_BLOCK_REVIEW: "bg-blue-100 text-blue-800",
+  PENDING_DISTRICT_REVIEW: "bg-purple-100 text-purple-800",
+  PENDING_STATE_REVIEW: "bg-indigo-100 text-indigo-800",
+  RESOLVED: "bg-green-100 text-green-800",
+  REJECTED_BY_BLOCK: "bg-red-100 text-red-800",
+  REJECTED_BY_DISTRICT: "bg-red-100 text-red-800",
+  REJECTED_BY_STATE: "bg-red-100 text-red-800",
+};
+
+const priorityIcons = {
+  LOW: <ArrowRight className="h-3 w-3" />,
+  MEDIUM: <Clock className="h-3 w-3" />,
+  HIGH: <ArrowUp className="h-3 w-3" />,
+  CRITICAL: <Zap className="h-3 w-3" />,
+};
 
 export default function Issues() {
-  const [issues, setIssues] = useState(dummyIssues);
+  const [issues, setIssues] = useState<Issue[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
+
+  // Form states
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [recipient, setRecipient] = useState("");
-  const { userType } = useParams();
+  const [priority, setPriority] = useState("MEDIUM");
+  const [remarks, setRemarks] = useState("");
 
-  const handleRaiseIssue = (e: React.FormEvent) => {
+  // Filter states
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState("all");
+
+  const { userType } = useParams();
+  const { toast } = useToast();
+
+  const currentUserLevel = userType?.toUpperCase() as
+    | "SCHOOL"
+    | "BLOCK"
+    | "DISTRICT"
+    | "STATE";
+
+  useEffect(() => {
+    fetchIssues();
+  }, [statusFilter, priorityFilter]);
+
+  const fetchIssues = async () => {
+    try {
+      setLoading(true);
+      const params: any = {};
+
+      if (statusFilter !== "all") {
+        params.status = statusFilter;
+      }
+
+      if (priorityFilter !== "all") {
+        params.priority = priorityFilter;
+      }
+
+      // Filter based on user level
+      if (currentUserLevel !== "STATE") {
+        params.level = currentUserLevel;
+      }
+
+      const response = await issuesAPI.getAll(params);
+      setIssues(response.data.data);
+    } catch (error) {
+      console.error("Error fetching issues:", error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch issues",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateIssue = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !description || !recipient) return;
-    setIssues((prev) => [
-      {
-        id: prev.length + 1,
-        source: "School",
+
+    if (!title || !description) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await issuesAPI.create({
         title,
         description,
-        date: new Date().toISOString().slice(0, 10),
-        solved: false,
-        recipient,
-      },
-      ...prev,
-    ]);
-    setTitle("");
-    setDescription("");
-    setRecipient("");
+        priority: priority as any,
+        schoolId: "dummy-school-id", // This should come from user context
+        raisedBy: "current-user-id", // This should come from user context
+      });
+
+      toast({
+        title: "Success",
+        description: "Issue created successfully",
+      });
+
+      setTitle("");
+      setDescription("");
+      setPriority("MEDIUM");
+      setShowCreateForm(false);
+      fetchIssues();
+    } catch (error) {
+      console.error("Error creating issue:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create issue",
+        variant: "destructive",
+      });
+    }
   };
+
+  const handleReviewIssue = async (issueId: string, action: string) => {
+    try {
+      let apiCall;
+
+      switch (currentUserLevel) {
+        case "BLOCK":
+          apiCall = issuesAPI.reviewAtBlock(issueId, {
+            action: action as any,
+            remarks,
+          });
+          break;
+        case "DISTRICT":
+          apiCall = issuesAPI.reviewAtDistrict(issueId, {
+            action: action as any,
+            remarks,
+          });
+          break;
+        case "STATE":
+          apiCall = issuesAPI.reviewAtState(issueId, {
+            action: action as any,
+            remarks,
+          });
+          break;
+        default:
+          throw new Error("Invalid user level for review");
+      }
+
+      await apiCall;
+
+      toast({
+        title: "Success",
+        description: `Issue ${action}${action.endsWith("e") ? "d" : "ed"} successfully`,
+      });
+
+      setRemarks("");
+      setSelectedIssue(null);
+      fetchIssues();
+    } catch (error) {
+      console.error("Error reviewing issue:", error);
+      toast({
+        title: "Error",
+        description: "Failed to review issue",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const canReviewIssue = (issue: Issue) => {
+    const statusLevelMap = {
+      PENDING_BLOCK_REVIEW: "BLOCK",
+      PENDING_DISTRICT_REVIEW: "DISTRICT",
+      PENDING_STATE_REVIEW: "STATE",
+    };
+
+    return (
+      statusLevelMap[issue.status as keyof typeof statusLevelMap] ===
+      currentUserLevel
+    );
+  };
+
+  const getStatusText = (status: string) => {
+    return status
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (l) => l.toUpperCase());
+  };
+
+  const filteredIssues = issues.filter((issue) => {
+    const statusMatch = statusFilter === "all" || issue.status === statusFilter;
+    const priorityMatch =
+      priorityFilter === "all" || issue.priority === priorityFilter;
+    return statusMatch && priorityMatch;
+  });
+
+  const IssueCard = ({ issue }: { issue: Issue }) => (
+    <Card key={issue.id} className="p-4">
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <div className="flex items-center space-x-2 mb-2">
+            <Badge className={priorityColors[issue.priority]}>
+              {priorityIcons[issue.priority]}
+              <span className="ml-1">{issue.priority}</span>
+            </Badge>
+            <Badge
+              className={
+                statusColors[issue.status as keyof typeof statusColors]
+              }
+            >
+              {getStatusText(issue.status)}
+            </Badge>
+            <span className="text-sm text-gray-500">#{issue.issueId}</span>
+          </div>
+
+          <h3 className="font-semibold text-lg">{issue.title}</h3>
+          <p className="text-gray-600 mb-2">{issue.description}</p>
+
+          <div className="text-sm text-gray-500">
+            <p>
+              School: {issue.school.name} ({issue.school.udise})
+            </p>
+            <p>
+              Block: {issue.school.block_name}, District:{" "}
+              {issue.school.district}
+            </p>
+            <p>
+              Created:{" "}
+              {formatDistanceToNow(new Date(issue.createdAt), {
+                addSuffix: true,
+              })}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex space-x-2">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Eye className="h-4 w-4 mr-1" />
+                View
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Issue Details - #{issue.issueId}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-semibold">{issue.title}</h4>
+                  <p className="text-gray-600">{issue.description}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium">Priority</label>
+                    <div>
+                      <Badge className={priorityColors[issue.priority]}>
+                        {issue.priority}
+                      </Badge>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Status</label>
+                    <div>
+                      <Badge
+                        className={
+                          statusColors[
+                            issue.status as keyof typeof statusColors
+                          ]
+                        }
+                      >
+                        {getStatusText(issue.status)}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Show remarks history */}
+                <div className="space-y-2">
+                  <h4 className="font-semibold">Review History</h4>
+                  {issue.remarksByBlock && (
+                    <div className="p-3 bg-blue-50 rounded">
+                      <p className="text-sm font-medium">
+                        Block Level Remarks:
+                      </p>
+                      <p className="text-sm">{issue.remarksByBlock}</p>
+                      {issue.reviewedByBlockAt && (
+                        <p className="text-xs text-gray-500">
+                          {formatDistanceToNow(
+                            new Date(issue.reviewedByBlockAt),
+                            { addSuffix: true },
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {issue.remarksByDistrict && (
+                    <div className="p-3 bg-purple-50 rounded">
+                      <p className="text-sm font-medium">
+                        District Level Remarks:
+                      </p>
+                      <p className="text-sm">{issue.remarksByDistrict}</p>
+                      {issue.reviewedByDistrictAt && (
+                        <p className="text-xs text-gray-500">
+                          {formatDistanceToNow(
+                            new Date(issue.reviewedByDistrictAt),
+                            { addSuffix: true },
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  {issue.remarksByState && (
+                    <div className="p-3 bg-indigo-50 rounded">
+                      <p className="text-sm font-medium">
+                        State Level Remarks:
+                      </p>
+                      <p className="text-sm">{issue.remarksByState}</p>
+                      {issue.reviewedByStateAt && (
+                        <p className="text-xs text-gray-500">
+                          {formatDistanceToNow(
+                            new Date(issue.reviewedByStateAt),
+                            { addSuffix: true },
+                          )}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {canReviewIssue(issue) && (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <MessageSquare className="h-4 w-4 mr-1" />
+                  Review
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Review Issue - #{issue.issueId}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-semibold">{issue.title}</h4>
+                    <p className="text-gray-600">{issue.description}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">
+                      Remarks
+                    </label>
+                    <Textarea
+                      value={remarks}
+                      onChange={(e) => setRemarks(e.target.value)}
+                      placeholder="Add your remarks or comments"
+                      rows={3}
+                    />
+                  </div>
+
+                  <div className="flex justify-end space-x-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => handleReviewIssue(issue.id, "reject")}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Reject
+                    </Button>
+                    {currentUserLevel !== "STATE" && (
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleReviewIssue(issue.id, "escalate")}
+                      >
+                        <ArrowUp className="h-4 w-4 mr-1" />
+                        Escalate
+                      </Button>
+                    )}
+                    <Button
+                      onClick={() => handleReviewIssue(issue.id, "resolve")}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Resolve
+                    </Button>
+                  </div>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
+        </div>
+      </div>
+    </Card>
+  );
 
   return (
     <AdminLayout
-      title="Raise Issue"
-      description="Raise an issue and send it to DEO, IS, or State. View previously raised issues."
-      adminLevel="SCHOOL ADMIN"
+      title="Issues Management"
+      description="Manage and track issues across different levels"
+      adminLevel={`${currentUserLevel} ADMIN`}
     >
-      {/* Raise Issue Form */}
-      {userType !== "state" && (
-        <Card className="w-full max-w-2xl mx-auto bg-gradient-to-br from-yellow-100 to-yellow-50 border-yellow-300 mb-8">
-          <CardHeader>
-            <CardTitle className="text-lg text-yellow-900">
-              Raise a New Issue
-            </CardTitle>
-            <CardDescription>
-              Fill the form to raise an issue and select the recipient.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="flex flex-col gap-4" onSubmit={handleRaiseIssue}>
-              <div>
-                <div className="font-semibold mb-2">Send Issue To</div>
-                <Select value={recipient} onValueChange={setRecipient} required>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose recipient..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {recipientOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {recipient === "" && (
-                  <div className="text-xs text-red-500 mt-2">
-                    Please select a recipient.
-                  </div>
-                )}
-              </div>
-              <Input
-                placeholder="Issue Title"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                required
-              />
-              <Input
-                placeholder="Description"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                required
-              />
-              <Button type="submit" disabled={!recipient}>
-                Raise Issue
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-      {/* List of Issues Raised by School */}
-      <Card className="w-full max-w-4xl mx-auto bg-gradient-to-br from-purple-100 to-pink-50 border-purple-300">
-        <CardHeader>
-          <CardTitle className="text-lg text-purple-900">
-            Your Raised Issues
-          </CardTitle>
-          <CardDescription>All issues you have raised</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {issues.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">
-                No issues found.
-              </div>
-            ) : (
-              issues
-                .filter((issue) => issue.source === "School")
-                .map((issue) => (
-                  <div
-                    key={issue.id}
-                    className={`flex flex-col md:flex-row md:items-center justify-between p-4 rounded-lg shadow-md border ${
-                      issue.solved
-                        ? "bg-gradient-to-r from-green-50 to-green-100 border-green-300"
-                        : "bg-gradient-to-r from-yellow-50 to-pink-50 border-pink-300"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 mb-2 md:mb-0">
-                      {sourceIcons[issue.source as keyof typeof sourceIcons]}
-                      <div>
-                        <div className="font-semibold text-lg">
-                          {issue.title}
-                        </div>
-                        <div className="text-sm text-gray-700">
-                          {issue.description}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          Sent to {issue.recipient} on {issue.date}
-                        </div>
-                      </div>
+      <div className="space-y-6">
+        <Tabs defaultValue="all" className="w-full">
+          <div className="flex justify-between items-center">
+            <TabsList>
+              <TabsTrigger value="all">All Issues</TabsTrigger>
+              <TabsTrigger value="pending">Pending Review</TabsTrigger>
+              <TabsTrigger value="resolved">Resolved</TabsTrigger>
+              <TabsTrigger value="rejected">Rejected</TabsTrigger>
+            </TabsList>
+
+            {currentUserLevel === "SCHOOL" && (
+              <Dialog open={showCreateForm} onOpenChange={setShowCreateForm}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Raise Issue
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Raise New Issue</DialogTitle>
+                  </DialogHeader>
+                  <form onSubmit={handleCreateIssue} className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Title
+                      </label>
+                      <Input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Brief description of the issue"
+                        required
+                      />
                     </div>
-                    <div className="flex flex-col items-end gap-2">
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setIssues(
-                              issues.map((i) =>
-                                i.id === issue.id ? { ...i, solved: !i.solved } : i
-                              )
-                            )
-                          }
-                        >
-                          {issue.solved ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                          )}
-                          <span className="ml-2">
-                            {issue.solved ? "Solved" : "Pending"}
-                          </span>
-                        </Button>
-                        <Select
-                          onValueChange={(value) =>
-                            setIssues(
-                              issues.map((i) =>
-                                i.id === issue.id
-                                  ? { ...i, recipient: value }
-                                  : i
-                              )
-                            )
-                          }
-                        >
-                          <SelectTrigger className="w-auto">
-                            <SelectValue placeholder="Forward to..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {recipientOptions.map((opt) => (
-                              <SelectItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Description
+                      </label>
+                      <Textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Detailed description of the issue"
+                        rows={4}
+                        required
+                      />
                     </div>
-                  </div>
-                ))
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1">
+                        Priority
+                      </label>
+                      <Select value={priority} onValueChange={setPriority}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="LOW">Low</SelectItem>
+                          <SelectItem value="MEDIUM">Medium</SelectItem>
+                          <SelectItem value="HIGH">High</SelectItem>
+                          <SelectItem value="CRITICAL">Critical</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex justify-end space-x-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowCreateForm(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit">Create Issue</Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
             )}
           </div>
-        </CardContent>
-      </Card>
+
+          {/* Filters */}
+          <div className="flex space-x-4 mb-4">
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="PENDING_BLOCK_REVIEW">
+                  Pending Block
+                </SelectItem>
+                <SelectItem value="PENDING_DISTRICT_REVIEW">
+                  Pending District
+                </SelectItem>
+                <SelectItem value="PENDING_STATE_REVIEW">
+                  Pending State
+                </SelectItem>
+                <SelectItem value="RESOLVED">Resolved</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Filter by priority" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Priorities</SelectItem>
+                <SelectItem value="LOW">Low</SelectItem>
+                <SelectItem value="MEDIUM">Medium</SelectItem>
+                <SelectItem value="HIGH">High</SelectItem>
+                <SelectItem value="CRITICAL">Critical</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button variant="outline" onClick={fetchIssues}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+
+          <TabsContent value="all">
+            <div className="grid gap-4">
+              {loading ? (
+                <div className="text-center py-8">Loading issues...</div>
+              ) : filteredIssues.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  No issues found
+                </div>
+              ) : (
+                filteredIssues.map((issue) => (
+                  <IssueCard key={issue.id} issue={issue} />
+                ))
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="pending">
+            <div className="grid gap-4">
+              {filteredIssues
+                .filter((issue) => issue.status.includes("PENDING"))
+                .map((issue) => (
+                  <IssueCard key={issue.id} issue={issue} />
+                ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="resolved">
+            <div className="grid gap-4">
+              {filteredIssues
+                .filter((issue) => issue.status === "RESOLVED")
+                .map((issue) => (
+                  <IssueCard key={issue.id} issue={issue} />
+                ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="rejected">
+            <div className="grid gap-4">
+              {filteredIssues
+                .filter((issue) => issue.status.includes("REJECTED"))
+                .map((issue) => (
+                  <IssueCard key={issue.id} issue={issue} />
+                ))}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
     </AdminLayout>
   );
 }

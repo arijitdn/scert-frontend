@@ -2,8 +2,9 @@ import axios from "axios";
 
 const api = axios.create({
   baseURL:
-    import.meta.env.VITE_BACKEND_URL + "/api/v1" ||
-    "http://localhost:3000/api/v1",
+    (import.meta.env.VITE_BACKEND_URL
+      ? import.meta.env.VITE_BACKEND_URL + "/api/v1"
+      : null) || "http://localhost:3000/api/v1",
   headers: {
     "Content-Type": "application/json",
   },
@@ -30,6 +31,14 @@ export const schoolsAPI = {
     api.get("/schools", { params }),
   getById: (id: string) => api.get(`/schools/${id}`),
   getByUdise: (udise: string) => api.get(`/schools/udise/${udise}`),
+  getClassEnrollments: (schoolId: string) =>
+    api.get(`/schools/${schoolId}/enrollments`),
+  updateClassEnrollment: (
+    schoolId: string,
+    data: { class: string; students: number },
+  ) => api.post(`/schools/${schoolId}/enrollments`, data),
+  deleteClassEnrollment: (schoolId: string, enrollmentId: string) =>
+    api.delete(`/schools/${schoolId}/enrollments/${enrollmentId}`),
 };
 
 // Books API
@@ -93,19 +102,19 @@ export const requisitionsAPI = {
 
 // Stock API
 export const stockAPI = {
-  getAll: () => api.get("/stock"),
+  getAll: (params?: { type?: string; userId?: string }) =>
+    api.get("/stock", { params }),
   getById: (id: string) => api.get(`/stock/${id}`),
   create: (stock: {
-    book_id: string;
+    bookId: string;
     quantity: number;
-    school_udise?: string;
-    academic_year: string;
+    userId: string;
+    type: string;
   }) => api.post("/stock", stock),
   update: (
     id: string,
     stock: {
       quantity: number;
-      school_udise?: string;
     },
   ) => api.put(`/stock/${id}`, stock),
   delete: (id: string) => api.delete(`/stock/${id}`),
@@ -113,29 +122,133 @@ export const stockAPI = {
   getBySchool: (schoolUdise: string) => api.get(`/stock/school/${schoolUdise}`),
 };
 
-// Backlog API
-export const backlogAPI = {
-  getAll: (params?: { type?: string; userId?: string }) =>
-    api.get("/backlog", { params }),
-  getById: (id: string) => api.get(`/backlog/${id}`),
-  create: (backlog: {
-    bookId: string;
-    type: string;
-    userId: string;
-    quantity: number;
-  }) => api.post("/backlog", backlog),
+// Backlog API functionality now uses stockAPI
+
+// EChallan API
+export const echallanAPI = {
+  getAll: (params?: { type?: string; status?: string }) =>
+    api.get("/echallans", { params }),
+  getById: (id: string) => api.get(`/echallans/${id}`),
+  create: (echallan: {
+    challanNo: string;
+    destinationType: string;
+    destinationName: string;
+    destinationId?: string;
+    requisitionId: string;
+    academicYear: string;
+    vehicleNo?: string;
+    agency?: string;
+    books: Array<{
+      bookId: string;
+      className: string;
+      subject: string;
+      bookName: string;
+      noOfBoxes: string;
+      noOfPackets: string;
+      noOfLooseBoxes: string;
+    }>;
+  }) => api.post("/echallans", echallan),
+  updateStatus: (
+    id: string,
+    data: {
+      status: string;
+      deliveredAt?: string;
+    },
+  ) => api.put(`/echallans/${id}/status`, data),
+  delete: (id: string) => api.delete(`/echallans/${id}`),
+};
+
+// Issues API
+export const issuesAPI = {
+  getAll: (params?: {
+    schoolId?: string;
+    status?: string;
+    level?: string;
+    priority?: string;
+  }) => api.get("/issues", { params }),
+  getById: (id: string) => api.get(`/issues/${id}`),
+  getSummary: (params?: { level?: string }) =>
+    api.get("/issues/summary", { params }),
+  create: (issue: {
+    title: string;
+    description: string;
+    priority?: string;
+    schoolId: string;
+    raisedBy: string;
+  }) => api.post("/issues", issue),
+  reviewAtBlock: (
+    id: string,
+    data: {
+      action: "escalate" | "resolve" | "reject";
+      remarks?: string;
+    },
+  ) => api.patch(`/issues/${id}/review/block`, data),
+  reviewAtDistrict: (
+    id: string,
+    data: {
+      action: "escalate" | "resolve" | "reject";
+      remarks?: string;
+    },
+  ) => api.patch(`/issues/${id}/review/district`, data),
+  reviewAtState: (
+    id: string,
+    data: {
+      action: "resolve" | "reject";
+      remarks?: string;
+    },
+  ) => api.patch(`/issues/${id}/review/state`, data),
+};
+
+export const notificationsAPI = {
+  getAll: (params?: {
+    userLevel?: string;
+    userId?: string;
+    schoolId?: string;
+    blockCode?: string;
+    districtCode?: string;
+    page?: number;
+    limit?: number;
+    unreadOnly?: boolean;
+  }) => api.get("/notifications", { params }),
+  getStats: (params?: {
+    userLevel?: string;
+    userId?: string;
+    schoolId?: string;
+    blockCode?: string;
+    districtCode?: string;
+  }) => api.get("/notifications/stats", { params }),
+  create: (notification: {
+    title: string;
+    message: string;
+    type?: string;
+    priority?: string;
+    sentBy: string;
+    sentFrom: string;
+    targetSchools?: boolean;
+    targetBlocks?: boolean;
+    targetDistricts?: boolean;
+    targetStates?: boolean;
+    specificSchoolIds?: string[];
+    specificBlockCodes?: number[];
+    specificDistrictCodes?: number[];
+    expiresAt?: string;
+  }) => api.post("/notifications", notification),
+  markAsRead: (id: string, data: { userId: string; userLevel: string }) =>
+    api.post(`/notifications/${id}/read`, data),
   update: (
     id: string,
-    backlog: {
-      bookId?: string;
+    notification: {
+      title?: string;
+      message?: string;
       type?: string;
-      userId?: string;
-      quantity?: number;
+      priority?: string;
+      isActive?: boolean;
+      expiresAt?: string;
+      sentBy: string;
     },
-  ) => api.put(`/backlog/${id}`, backlog),
-  delete: (id: string) => api.delete(`/backlog/${id}`),
-  getByType: (type: string, userId?: string) =>
-    api.get(`/backlog/type/${type}`, { params: userId ? { userId } : {} }),
+  ) => api.put(`/notifications/${id}`, notification),
+  delete: (id: string, data: { sentBy: string }) =>
+    api.delete(`/notifications/${id}`, { data }),
 };
 
 export default api;

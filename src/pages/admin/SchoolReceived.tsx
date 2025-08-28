@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import AdminLayout from "@/components/AdminLayout";
 import {
   Card,
@@ -7,9 +7,10 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -17,399 +18,412 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { stockAPI, echallanAPI } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
-const ncertBookNames = [
-  "Mathematics Textbook for Class X",
-  "Science Textbook for Class IX",
-  "Social Science: Contemporary India - II",
-  "English: First Flight",
-  "Hindi: Kshitij - 2",
-  "Physics: Textbook for Class XII",
-  "Chemistry: Textbook for Class XI",
-  "Biology: Textbook for Class XII",
-  "Economics: Indian Economic Development",
-  "History: Themes in Indian History - I",
-  "Geography: Fundamentals of Physical Geography",
-  "Political Science: Indian Constitution at Work",
-];
-
-const initialReceived = [
-  {
-    id: 1,
-    requisitionNo: "REQ-001",
-    class: "3",
-    bookName: "Maths for Class 3",
-    category: "Textbook",
-    requisitioned: 30,
-    received: 20,
-  },
-  {
-    id: 2,
-    requisitionNo: "REQ-002",
-    class: "5",
-    bookName: "Science Explorer",
-    category: "Textbook",
-    requisitioned: 15,
-    received: 10,
-  },
-  {
-    id: 3,
-    requisitionNo: "REQ-003",
-    class: "4",
-    bookName: "English Reader",
-    category: "Workbook",
-    requisitioned: 20,
-    received: 15,
-  },
-];
-
-// Dummy data for all requisitions (simulating a backend fetch)
-const allRequisitions = [
-  {
-    id: 1,
-    requisitionNo: "REQ-001",
-    class: "3",
-    bookName: "Maths for Class 3",
-    category: "Textbook",
-    requisitioned: 30,
-  },
-  {
-    id: 2,
-    requisitionNo: "REQ-002",
-    class: "5",
-    bookName: "Science Explorer",
-    category: "Textbook",
-    requisitioned: 15,
-  },
-  {
-    id: 3,
-    requisitionNo: "REQ-003",
-    class: "4",
-    bookName: "English Reader",
-    category: "Workbook",
-    requisitioned: 20,
-  },
-  {
-    id: 4,
-    requisitionNo: "REQ-004",
-    class: "6",
-    bookName: "History of India",
-    category: "Textbook",
-    requisitioned: 25,
-  },
-  {
-    id: 5,
-    requisitionNo: "REQ-005",
-    class: "7",
-    bookName: "Physics Basics",
-    category: "Reference",
-    requisitioned: 10,
-  },
-];
-
-export default function SchoolReceived({ adminLevel }: { adminLevel: string }) {
-  const [receivedData, setReceivedData] = useState(initialReceived);
-  const [selectedReqNo, setSelectedReqNo] = useState<string | null>(null);
-  const [stockEntryData, setStockEntryData] = useState({
-    class: "",
-    bookName: "",
-    category: "",
-    requisitioned: 0,
-    received: 0,
-    left: 0,
-  });
-
-  const handleReceivedChange = (id: number, value: string) => {
-    const num = Math.max(0, Number(value.replace(/[^0-9]/g, "")));
-    setReceivedData((prev) =>
-      prev.map((row) =>
-        row.id === id
-          ? {
-              ...row,
-              received: num > row.requisitioned ? row.requisitioned : num,
-            }
-          : row,
-      ),
-    );
+// Types for API data
+interface EChallanBook {
+  id: string;
+  bookId: string;
+  className: string;
+  subject: string;
+  bookName: string;
+  noOfBoxes: number;
+  noOfPackets: number;
+  noOfLooseBoxes: number;
+  totalQuantity: number;
+  book: {
+    id: string;
+    title: string;
+    class: string;
+    subject: string;
+    category: string;
+    rate: number;
   };
+}
 
-  const handleAddRow = () => {
-    const newId =
-      receivedData.length > 0
-        ? Math.max(...receivedData.map((item) => item.id)) + 1
-        : 1;
-    const randomBookName =
-      ncertBookNames[Math.floor(Math.random() * ncertBookNames.length)];
-    const newRow = {
-      id: newId,
-      requisitionNo: `REQ-${String(newId).padStart(3, "0")}`,
-      class: `Class ${Math.floor(Math.random() * 10) + 1}`,
-      bookName: randomBookName,
-      category: "Textbook", // Added category property
-      requisitioned: Math.floor(Math.random() * 100) + 50,
-      received: 0,
-    };
-    setReceivedData((prev) => [...prev, newRow]);
+interface EChallan {
+  id: string;
+  challanId: string;
+  challanNo: string;
+  destinationType: string;
+  destinationName: string;
+  destinationId: string;
+  requisitionId: string;
+  academicYear: string;
+  vehicleNo?: string;
+  agency?: string;
+  totalBooks: number;
+  totalBoxes: number;
+  totalPackets: number;
+  totalLooseBoxes: number;
+  status: string;
+  generatedAt: string;
+  deliveredAt?: string;
+  books: EChallanBook[];
+}
+
+interface Stock {
+  id: string;
+  bookId: string;
+  userId: string;
+  type: string;
+  quantity: number;
+  book: {
+    id: string;
+    title: string;
+    class: string;
+    subject: string;
+    category: string;
+    rate: number;
   };
+}
 
-  const handleReqNoChange = (value: string) => {
-    setSelectedReqNo(value);
-    const selectedRequisition = allRequisitions.find(
-      (req) => req.requisitionNo === value,
-    );
-    if (selectedRequisition) {
-      const existingReceived = receivedData.find(
-        (data) => data.requisitionNo === value,
+interface ReceivedItem {
+  id: string;
+  challanNo: string;
+  bookName: string;
+  bookId: string;
+  class: string;
+  subject: string;
+  totalQuantity: number;
+  received: number;
+}
+
+export default function SchoolReceived() {
+  const [received, setReceived] = useState<ReceivedItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [challans, setChallans] = useState<EChallan[]>([]);
+  const [selectedChallan, setSelectedChallan] = useState<string>("");
+  const [selectedBook, setSelectedBook] = useState<string>("");
+  const [quantity, setQuantity] = useState<string>("");
+  const [addingStock, setAddingStock] = useState(false);
+  const { toast } = useToast();
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setLoading(true);
+
+      // Load e-challans delivered to schools
+      const challanResponse = await echallanAPI.getAll();
+      const schoolChallans = challanResponse.data.filter(
+        (challan: EChallan) =>
+          challan.destinationType === "school" &&
+          challan.status === "delivered",
       );
-      const currentReceived = existingReceived ? existingReceived.received : 0;
-      setStockEntryData({
-        class: selectedRequisition.class,
-        bookName: selectedRequisition.bookName,
-        category: selectedRequisition.category,
-        requisitioned: selectedRequisition.requisitioned,
-        received: currentReceived,
-        left: selectedRequisition.requisitioned - currentReceived,
+      setChallans(schoolChallans);
+
+      // Load existing stock entries to show received items
+      const stockResponse = await stockAPI.getAll();
+      const schoolStock = stockResponse.data;
+
+      // Map challans to received items format
+      const receivedItems = schoolChallans.flatMap((challan: EChallan) =>
+        challan.books.map((book: EChallanBook) => {
+          const receivedQuantity = schoolStock
+            .filter((stock: Stock) => stock.bookId === book.bookId)
+            .reduce((sum: number, stock: Stock) => sum + stock.quantity, 0);
+
+          return {
+            id: `${challan.id}-${book.id}`,
+            challanNo: challan.challanNo,
+            bookName: book.book.title,
+            bookId: book.bookId,
+            class: book.book.class,
+            subject: book.book.subject,
+            totalQuantity: book.totalQuantity,
+            received: receivedQuantity,
+          };
+        }),
+      );
+
+      setReceived(receivedItems);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to load received data",
       });
-    } else {
-      setStockEntryData({
-        class: "",
-        bookName: "",
-        category: "",
-        requisitioned: 0,
-        received: 0,
-        left: 0,
-      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleStockReceivedChange = (value: string) => {
-    const num = Math.max(0, Number(value.replace(/[^0-9]/g, "")));
-    setStockEntryData((prev) => ({
-      ...prev,
-      received: num,
-      left: prev.requisitioned - num,
-    }));
-  };
-
-  const handleSaveStockEntry = () => {
-    if (!selectedReqNo || stockEntryData.received === null) {
-      alert("Please select a Requisition No and enter Received quantity.");
+  const addStockEntry = async () => {
+    if (!selectedChallan || !selectedBook || !quantity) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Please fill all fields",
+      });
       return;
     }
 
-    const existingIndex = receivedData.findIndex(
-      (data) => data.requisitionNo === selectedReqNo,
-    );
+    try {
+      setAddingStock(true);
 
-    if (existingIndex > -1) {
-      // Update existing entry
-      setReceivedData((prev) =>
-        prev.map((row, index) =>
-          index === existingIndex
-            ? { ...row, received: stockEntryData.received }
-            : row,
-        ),
-      );
-    } else {
-      // Add new entry
-      const newId =
-        receivedData.length > 0
-          ? Math.max(...receivedData.map((item) => item.id)) + 1
-          : 1;
-      setReceivedData((prev) => [
-        ...prev,
-        {
-          id: newId,
-          requisitionNo: selectedReqNo,
-          class: stockEntryData.class,
-          bookName: stockEntryData.bookName,
-          category: stockEntryData.category,
-          requisitioned: stockEntryData.requisitioned,
-          received: stockEntryData.received,
-        },
-      ]);
+      await stockAPI.create({
+        bookId: selectedBook,
+        type: "RECEIVED",
+        quantity: parseInt(quantity),
+      });
+
+      toast({
+        title: "Success",
+        description: "Stock entry added successfully",
+      });
+
+      // Reset form and reload data
+      setSelectedChallan("");
+      setSelectedBook("");
+      setQuantity("");
+      await loadData();
+    } catch (error) {
+      console.error("Error adding stock:", error);
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Failed to add stock entry",
+      });
+    } finally {
+      setAddingStock(false);
     }
-
-    // Reset form
-    setSelectedReqNo(null);
-    setStockEntryData({
-      class: "",
-      bookName: "",
-      category: "",
-      requisitioned: 0,
-      received: 0,
-      left: 0,
-    });
   };
+
+  const selectedChallanData = challans.find((c) => c.id === selectedChallan);
+  const availableBooks = selectedChallanData?.books || [];
+
+  const getTotalProgress = () => {
+    const totalDelivered = received.reduce(
+      (sum, item) => sum + item.totalQuantity,
+      0,
+    );
+    const totalReceived = received.reduce(
+      (sum, item) => sum + item.received,
+      0,
+    );
+    return totalDelivered > 0 ? (totalReceived / totalDelivered) * 100 : 0;
+  };
+
+  const getItemProgress = (item: ReceivedItem) => {
+    return item.totalQuantity > 0
+      ? (item.received / item.totalQuantity) * 100
+      : 0;
+  };
+
+  if (loading) {
+    return (
+      <AdminLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading received data...</span>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout
       title="Books Received"
-      description="View all books received by your school"
+      description="View and track books received from e-challans"
       adminLevel="SCHOOL ADMIN"
     >
-      {/* Stock Entry Card */}
-      <Card className="w-full max-w-5xl mx-auto mb-8 bg-gradient-to-br from-blue-100 to-blue-50 border-blue-300">
+      {/* Overall Progress Card */}
+      <Card className="w-full max-w-5xl mx-auto mb-6">
         <CardHeader>
-          <CardTitle className="text-lg text-blue-900">Stock Entry</CardTitle>
+          <CardTitle className="text-xl">Received Progress</CardTitle>
           <CardDescription>
-            Enter details for books received against a requisition.
+            Overall progress of books received from delivered challans
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="text-center">
+              <div className="text-2xl font-bold text-blue-600">
+                {received.reduce((sum, item) => sum + item.totalQuantity, 0)}
+              </div>
+              <div className="text-sm text-gray-600">Total Delivered</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-green-600">
+                {received.reduce((sum, item) => sum + item.received, 0)}
+              </div>
+              <div className="text-sm text-gray-600">Total Received</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl font-bold text-orange-600">
+                {received.reduce(
+                  (sum, item) => sum + (item.totalQuantity - item.received),
+                  0,
+                )}
+              </div>
+              <div className="text-sm text-gray-600">Pending</div>
+            </div>
+          </div>
+          <Progress value={getTotalProgress()} className="h-3" />
+          <p className="text-sm text-gray-600 mt-2 text-center">
+            {getTotalProgress().toFixed(1)}% of delivered books received
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Stock Entry Card */}
+      <Card className="w-full max-w-5xl mx-auto mb-6">
+        <CardHeader>
+          <CardTitle>Add Stock Entry</CardTitle>
+          <CardDescription>
+            Record books received from a delivered e-challan
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Requisition No
+              <label className="block text-sm font-medium mb-2">
+                E-Challan
               </label>
               <Select
-                onValueChange={handleReqNoChange}
-                value={selectedReqNo || ""}
+                value={selectedChallan}
+                onValueChange={setSelectedChallan}
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select Requisition No" />
+                <SelectTrigger>
+                  <SelectValue placeholder="Select challan" />
                 </SelectTrigger>
                 <SelectContent>
-                  {allRequisitions.map((req) => (
-                    <SelectItem key={req.id} value={req.requisitionNo}>
-                      {req.requisitionNo}
+                  {challans.map((challan) => (
+                    <SelectItem key={challan.id} value={challan.id}>
+                      {challan.challanNo} - {challan.destinationName}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Class
-              </label>
-              <Input
-                type="text"
-                value={stockEntryData.class}
-                readOnly
-                className="bg-gray-100"
-              />
+              <label className="block text-sm font-medium mb-2">Book</label>
+              <Select
+                value={selectedBook}
+                onValueChange={setSelectedBook}
+                disabled={!selectedChallan}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select book" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableBooks.map((book) => (
+                    <SelectItem key={book.id} value={book.bookId}>
+                      {book.book.title} - Class {book.book.class}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Book Name
-              </label>
-              <Input
-                type="text"
-                value={stockEntryData.bookName}
-                readOnly
-                className="bg-gray-100"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Category
-              </label>
-              <Input
-                type="text"
-                value={stockEntryData.category}
-                readOnly
-                className="bg-gray-100"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Requisition Asked
+              <label className="block text-sm font-medium mb-2">
+                Quantity Received
               </label>
               <Input
                 type="number"
-                value={stockEntryData.requisitioned}
-                readOnly
-                className="bg-gray-100"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                placeholder="Enter quantity"
+                min="1"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Received
-              </label>
-              <Input
-                type="number"
-                min={0}
-                max={stockEntryData.requisitioned}
-                value={stockEntryData.received}
-                onChange={(e) => handleStockReceivedChange(e.target.value)}
-              />
+
+            <div className="flex items-end">
+              <Button
+                onClick={addStockEntry}
+                disabled={
+                  addingStock || !selectedChallan || !selectedBook || !quantity
+                }
+                className="w-full"
+              >
+                {addingStock ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Entry
+                  </>
+                )}
+              </Button>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Left
-              </label>
-              <Input
-                type="number"
-                value={stockEntryData.left}
-                readOnly
-                className="bg-gray-100"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end mt-4">
-            <Button onClick={handleSaveStockEntry}>Save Stock Entry</Button>
           </div>
         </CardContent>
       </Card>
 
-      {/* Books Received Card */}
-      <Card className="w-full max-w-5xl mx-auto bg-gradient-to-br from-green-100 to-green-50 border-green-300">
+      {/* Received Books Table */}
+      <Card className="w-full max-w-5xl mx-auto">
         <CardHeader>
-          <CardTitle className="text-lg text-green-900">
-            Books Received
-          </CardTitle>
+          <CardTitle>Books Received from E-Challans</CardTitle>
+          <CardDescription>
+            Track books received against delivered e-challans
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="min-w-full border bg-white rounded-lg">
-              <thead>
-                <tr className="bg-green-200 text-green-900">
-                  <th className="px-4 py-2 border">Requisition No</th>
-                  <th className="px-4 py-2 border">Class</th>
-                  <th className="px-4 py-2 border">Book Name</th>
-                  <th className="px-4 py-2 border">Requisition Asked</th>
-                  <th className="px-4 py-2 border">Received</th>
-                  <th className="px-4 py-2 border">Left</th>
-                </tr>
-              </thead>
-              <tbody>
-                {receivedData.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="text-center py-8 text-gray-500">
-                      No books received yet.
-                    </td>
+          {received.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              No books delivered to school yet
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse border">
+                <thead>
+                  <tr className="bg-gray-50">
+                    <th className="border p-3 text-left">Challan No</th>
+                    <th className="border p-3 text-left">Book</th>
+                    <th className="border p-3 text-left">Class</th>
+                    <th className="border p-3 text-left">Subject</th>
+                    <th className="border p-3 text-center">Delivered</th>
+                    <th className="border p-3 text-center">Received</th>
+                    <th className="border p-3 text-center">Pending</th>
+                    <th className="border p-3 text-center">Progress</th>
                   </tr>
-                ) : (
-                  receivedData.map((row) => (
-                    <tr key={row.id} className="text-center">
-                      <td className="px-4 py-2 border">{row.requisitionNo}</td>
-                      <td className="px-4 py-2 border">{row.class}</td>
-                      <td className="px-4 py-2 border">{row.bookName}</td>
-                      <td className="px-4 py-2 border">{row.requisitioned}</td>
-                      <td className="px-4 py-2 border">
-                        <Input
-                          type="number"
-                          min={0}
-                          max={row.requisitioned}
-                          value={row.received}
-                          readOnly
-                          className="w-20 px-2 py-1 border rounded text-center bg-gray-100"
-                        />
+                </thead>
+                <tbody>
+                  {received.map((item) => (
+                    <tr key={item.id} className="hover:bg-gray-50">
+                      <td className="border p-3 font-mono text-sm">
+                        {item.challanNo}
                       </td>
-                      <td className="px-4 py-2 border font-semibold">
-                        {row.requisitioned - row.received}
+                      <td className="border p-3">{item.bookName}</td>
+                      <td className="border p-3 text-center">{item.class}</td>
+                      <td className="border p-3">{item.subject}</td>
+                      <td className="border p-3 text-center font-semibold">
+                        {item.totalQuantity}
+                      </td>
+                      <td className="border p-3 text-center font-semibold text-green-600">
+                        {item.received}
+                      </td>
+                      <td className="border p-3 text-center font-semibold text-orange-600">
+                        {item.totalQuantity - item.received}
+                      </td>
+                      <td className="border p-3">
+                        <div className="flex items-center gap-2">
+                          <Progress
+                            value={getItemProgress(item)}
+                            className="flex-1 h-2"
+                          />
+                          <span className="text-xs text-gray-600 min-w-[40px]">
+                            {getItemProgress(item).toFixed(0)}%
+                          </span>
+                        </div>
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex justify-end mt-4">
-            <Button onClick={handleAddRow}>
-              <Plus className="h-4 w-4 mr-2" /> Add New
-            </Button>
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </AdminLayout>

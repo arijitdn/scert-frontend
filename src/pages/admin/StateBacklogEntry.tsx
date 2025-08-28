@@ -19,7 +19,7 @@ import {
   Filter,
   X,
 } from "lucide-react";
-import { booksAPI, backlogAPI } from "@/lib/api";
+import { booksAPI, stockAPI } from "@/lib/api";
 
 // Types
 interface Book {
@@ -32,11 +32,9 @@ interface Book {
   academic_year: string;
 }
 
-interface BacklogEntry {
+interface StateStockEntry {
   id: string;
   bookId: string;
-  type: string;
-  userId: string;
   quantity: number;
   createdAt: string;
   updatedAt: string;
@@ -58,7 +56,7 @@ export default function StateBacklogEntry() {
   const [rows, setRows] = useState<RowData[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
   const [filteredBooks, setFilteredBooks] = useState<Book[]>([]);
-  const [savedEntries, setSavedEntries] = useState<BacklogEntry[]>([]);
+  const [savedEntries, setSavedEntries] = useState<StateStockEntry[]>([]);
   const [classes, setClasses] = useState<string[]>([]);
   const [subjects, setSubjects] = useState<string[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -70,6 +68,19 @@ export default function StateBacklogEntry() {
   const [filterClass, setFilterClass] = useState<string>("");
   const [filterSubject, setFilterSubject] = useState<string>("");
   const [filterCategory, setFilterCategory] = useState<string>("");
+
+  // Utility function to check if a book already exists
+  const isBookAlreadyExists = (bookId: string, excludeRowId?: string) => {
+    // Check in saved entries
+    const existsInSaved = savedEntries.some((entry) => entry.bookId === bookId);
+
+    // Check in current rows (excluding the specified row if provided)
+    const existsInRows = rows.some(
+      (row) => row.bookId === bookId && row.id !== excludeRowId,
+    );
+
+    return { existsInSaved, existsInRows };
+  };
 
   // Apply filters to books
   useEffect(() => {
@@ -99,17 +110,17 @@ export default function StateBacklogEntry() {
     const loadInitialData = async () => {
       setLoading(true);
       try {
-        const [booksResponse, savedEntriesResponse] = await Promise.all([
+        const [booksResponse, stateStockResponse] = await Promise.all([
           booksAPI.getAll(),
-          backlogAPI.getByType("STATE", "state"),
+          stockAPI.getStateStock(),
         ]);
 
         const booksData: Book[] = booksResponse.data.data;
-        const savedEntriesData: BacklogEntry[] = savedEntriesResponse.data.data;
+        const stateStockData: StateStockEntry[] = stateStockResponse.data.data;
 
         setBooks(booksData);
         setFilteredBooks(booksData);
-        setSavedEntries(savedEntriesData);
+        setSavedEntries(stateStockData);
 
         // Extract unique values from books
         const classesData = [...new Set(booksData.map((book) => book.class))];
@@ -143,14 +154,39 @@ export default function StateBacklogEntry() {
   const handleBookSelect = (rowId: string, bookId: string) => {
     const selectedBook = books.find((book) => book.id === bookId);
 
-    // Check if this book is already selected in existing saved entries
+    // Check if this book is already selected in existing state stock
     const existingEntry = savedEntries.find((entry) => entry.bookId === bookId);
     if (existingEntry) {
-      const shouldContinue = window.confirm(
-        `This book "${selectedBook?.title}" already exists in your backlog entries with quantity ${existingEntry.quantity}. ` +
-          `If you continue, your new quantity will be ADDED to the existing quantity. Do you want to continue?`,
+      const shouldEdit = window.confirm(
+        `This book "${selectedBook?.title}" already exists in your saved state stock with quantity ${existingEntry.quantity}. ` +
+          `Do you want to edit the existing entry instead of creating a new one?`,
       );
-      if (!shouldContinue) {
+      if (shouldEdit) {
+        // Remove the current new row and edit the existing saved entry
+        setRows((prev) => prev.filter((row) => row.id !== rowId));
+
+        // Add the existing entry to rows for editing
+        setRows((prev) => [
+          ...prev,
+          {
+            id: existingEntry.id!,
+            bookId: existingEntry.bookId,
+            type: "STATE",
+            userId: "STATE",
+            quantity: existingEntry.quantity.toString(),
+            book: existingEntry.book,
+            isEditing: true,
+            isNew: false,
+          },
+        ]);
+        return;
+      } else {
+        // User chose not to edit existing entry, reset the book selection
+        setRows((prev) =>
+          prev.map((row) =>
+            row.id === rowId ? { ...row, bookId: "", book: undefined } : row,
+          ),
+        );
         return;
       }
     }
@@ -160,10 +196,28 @@ export default function StateBacklogEntry() {
       (row) => row.id !== rowId && row.bookId === bookId,
     );
     if (duplicateRow) {
-      alert(
-        `This book "${selectedBook?.title}" is already selected in another row. Please select a different book.`,
+      const shouldEdit = window.confirm(
+        `This book "${selectedBook?.title}" is already selected in another row. ` +
+          `Do you want to edit the existing row instead?`,
       );
-      return;
+      if (shouldEdit) {
+        // Remove the current new row and switch to editing the existing one
+        setRows((prev) => prev.filter((row) => row.id !== rowId));
+        setRows((prev) =>
+          prev.map((row) =>
+            row.id === duplicateRow.id ? { ...row, isEditing: true } : row,
+          ),
+        );
+        return;
+      } else {
+        // User chose not to edit existing row, reset the book selection
+        setRows((prev) =>
+          prev.map((row) =>
+            row.id === rowId ? { ...row, bookId: "", book: undefined } : row,
+          ),
+        );
+        return;
+      }
     }
 
     setRows((prev) =>
@@ -202,20 +256,43 @@ export default function StateBacklogEntry() {
       return;
     }
 
+    // Additional validation: Check for duplicates if this is a new entry
+    if (row.isNew) {
+      const existingEntry = savedEntries.find(
+        (entry) => entry.bookId === row.bookId,
+      );
+      if (existingEntry) {
+        alert(
+          `This book "${row.book?.title}" already exists in your saved state stock. Please edit the existing entry instead of creating a new one.`,
+        );
+        return;
+      }
+
+      // Check for duplicates in other current rows
+      const duplicateInRows = rows.find(
+        (r) => r.id !== id && r.bookId === row.bookId && !r.isNew,
+      );
+      if (duplicateInRows) {
+        alert(
+          `This book "${row.book?.title}" is already being processed in another row. Please avoid duplicates.`,
+        );
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       if (row.isNew) {
-        // Create or update entry
-        const entryResponse = await backlogAPI.create({
+        // Create or update entry in state stock
+        const entryResponse = await stockAPI.create({
           bookId: row.bookId,
-          type: row.type,
-          userId: row.userId,
           quantity: parseInt(row.quantity),
+          userId: "state",
+          type: "STATE",
         });
 
-        const entry: BacklogEntry = entryResponse.data;
+        const entry: StateStockEntry = entryResponse.data;
 
-        // Update the row with the real ID from database
         setRows((prev) =>
           prev.map((r) =>
             r.id === id
@@ -225,18 +302,12 @@ export default function StateBacklogEntry() {
         );
 
         // Refresh saved entries
-        const savedEntriesResponse = await backlogAPI.getByType(
-          "STATE",
-          "state",
-        );
-        const savedEntriesData: BacklogEntry[] = savedEntriesResponse.data.data;
-        setSavedEntries(savedEntriesData);
+        const stateStockResponse = await stockAPI.getStateStock();
+        const stateStockData: StateStockEntry[] = stateStockResponse.data.data;
+        setSavedEntries(stateStockData);
       } else {
-        // Update existing entry
-        await backlogAPI.update(id, {
-          bookId: row.bookId,
-          type: row.type,
-          userId: row.userId,
+        // Update existing entry in state stock
+        await stockAPI.update(id, {
           quantity: parseInt(row.quantity),
         });
 
@@ -245,12 +316,9 @@ export default function StateBacklogEntry() {
         );
 
         // Refresh saved entries
-        const savedEntriesResponse = await backlogAPI.getByType(
-          "STATE",
-          "state",
-        );
-        const savedEntriesData: BacklogEntry[] = savedEntriesResponse.data.data;
-        setSavedEntries(savedEntriesData);
+        const stateStockResponse = await stockAPI.getStateStock();
+        const stateStockData: StateStockEntry[] = stateStockResponse.data.data;
+        setSavedEntries(stateStockData);
       }
     } catch (error) {
       console.error("Error saving row:", error);
@@ -268,17 +336,14 @@ export default function StateBacklogEntry() {
       setSaving(true);
       try {
         if (!row.isNew) {
-          // Delete from database if it's not a new entry
-          await backlogAPI.delete(id);
+          // Delete from state stock if it's not a new entry
+          await stockAPI.delete(id);
 
           // Refresh saved entries
-          const savedEntriesResponse = await backlogAPI.getByType(
-            "STATE",
-            "state",
-          );
-          const savedEntriesData: BacklogEntry[] =
-            savedEntriesResponse.data.data;
-          setSavedEntries(savedEntriesData);
+          const stateStockResponse = await stockAPI.getStateStock();
+          const stateStockData: StateStockEntry[] =
+            stateStockResponse.data.data;
+          setSavedEntries(stateStockData);
         }
 
         // Remove from rows
@@ -302,23 +367,44 @@ export default function StateBacklogEntry() {
       return;
     }
 
+    // Check for duplicates before saving
+    const bookIds = unsavedRows.map((row) => row.bookId);
+    const uniqueBookIds = new Set(bookIds);
+    if (bookIds.length !== uniqueBookIds.size) {
+      alert(
+        "Duplicate books detected in the rows to be saved. Please ensure each book appears only once.",
+      );
+      return;
+    }
+
+    // Check for duplicates with existing saved entries (for new entries only)
+    const newRows = unsavedRows.filter((row) => row.isNew);
+    for (const row of newRows) {
+      const existingEntry = savedEntries.find(
+        (entry) => entry.bookId === row.bookId,
+      );
+      if (existingEntry) {
+        alert(
+          `Book "${row.book?.title}" already exists in your saved state stock. Please remove it from the current rows or edit the existing entry instead.`,
+        );
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const promises = unsavedRows.map(async (row) => {
         if (row.isNew) {
-          const entryResponse = await backlogAPI.create({
+          const entryResponse = await stockAPI.create({
             bookId: row.bookId,
-            type: row.type,
-            userId: row.userId,
             quantity: parseInt(row.quantity),
+            userId: "state",
+            type: "STATE",
           });
-          const entry: BacklogEntry = entryResponse.data;
+          const entry: StateStockEntry = entryResponse.data;
           return { oldId: row.id, newId: entry.id };
         } else {
-          await backlogAPI.update(row.id, {
-            bookId: row.bookId,
-            type: row.type,
-            userId: row.userId,
+          await stockAPI.update(row.id, {
             quantity: parseInt(row.quantity),
           });
           return null;
@@ -344,9 +430,9 @@ export default function StateBacklogEntry() {
       );
 
       // Refresh saved entries
-      const savedEntriesResponse = await backlogAPI.getByType("STATE", "state");
-      const savedEntriesData: BacklogEntry[] = savedEntriesResponse.data.data;
-      setSavedEntries(savedEntriesData);
+      const stateStockResponse = await stockAPI.getStateStock();
+      const stateStockData: StateStockEntry[] = stateStockResponse.data.data;
+      setSavedEntries(stateStockData);
 
       alert("All changes saved successfully!");
     } catch (error) {
@@ -357,14 +443,14 @@ export default function StateBacklogEntry() {
     }
   };
 
-  const handleEditSavedEntry = (entry: BacklogEntry) => {
+  const handleEditSavedEntry = (entry: StateStockEntry) => {
     // Add the saved entry to the editable rows
     const newRow: RowData = {
       id: entry.id!,
       bookId: entry.bookId,
       book: entry.book,
-      type: entry.type,
-      userId: entry.userId,
+      type: "STATE",
+      userId: "state",
       quantity: entry.quantity.toString(),
       isEditing: true,
       isNew: false,
@@ -376,25 +462,22 @@ export default function StateBacklogEntry() {
   const handleDeleteSavedEntry = async (entryId: string, bookTitle: string) => {
     if (
       window.confirm(
-        `Are you sure you want to delete the backlog entry for "${bookTitle}"? This action cannot be undone.`,
+        `Are you sure you want to delete the state stock entry for "${bookTitle}"? This action cannot be undone.`,
       )
     ) {
       setSaving(true);
       try {
-        await backlogAPI.delete(entryId);
+        await stockAPI.delete(entryId);
 
         // Refresh saved entries
-        const savedEntriesResponse = await backlogAPI.getByType(
-          "STATE",
-          "state",
-        );
-        const savedEntriesData: BacklogEntry[] = savedEntriesResponse.data.data;
-        setSavedEntries(savedEntriesData);
+        const stateStockResponse = await stockAPI.getStateStock();
+        const stateStockData: StateStockEntry[] = stateStockResponse.data.data;
+        setSavedEntries(stateStockData);
 
-        alert("Backlog entry deleted successfully!");
+        alert("State stock entry deleted successfully!");
       } catch (error) {
         console.error("Error deleting saved entry:", error);
-        alert("Error deleting backlog entry. Please try again.");
+        alert("Error deleting state stock entry. Please try again.");
       } finally {
         setSaving(false);
       }
@@ -572,11 +655,39 @@ export default function StateBacklogEntry() {
                               <SelectValue placeholder="Select book" />
                             </SelectTrigger>
                             <SelectContent>
-                              {filteredBooks.map((book) => (
-                                <SelectItem key={book.id} value={book.id}>
-                                  {book.title} ({book.class} - {book.subject})
-                                </SelectItem>
-                              ))}
+                              {filteredBooks.map((book) => {
+                                const { existsInSaved, existsInRows } =
+                                  isBookAlreadyExists(book.id, row.id);
+                                const isDisabled =
+                                  existsInSaved || existsInRows;
+
+                                return (
+                                  <SelectItem
+                                    key={book.id}
+                                    value={book.id}
+                                    disabled={isDisabled}
+                                    className={
+                                      isDisabled
+                                        ? "opacity-50 cursor-not-allowed"
+                                        : ""
+                                    }
+                                  >
+                                    <div className="flex items-center justify-between w-full">
+                                      <span>
+                                        {book.title} ({book.class} -{" "}
+                                        {book.subject})
+                                      </span>
+                                      {isDisabled && (
+                                        <span className="text-xs text-red-500 ml-2">
+                                          {existsInSaved
+                                            ? "(Already saved)"
+                                            : "(Already selected)"}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                         ) : (
@@ -689,7 +800,7 @@ export default function StateBacklogEntry() {
       {/* Saved Books Table */}
       <Card className="w-full max-w-6xl mx-auto mt-8 shadow-xl rounded-2xl border-0">
         <CardHeader>
-          <CardTitle>Saved State Backlog Entries</CardTitle>
+          <CardTitle>Saved State Stock Entries</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -709,7 +820,7 @@ export default function StateBacklogEntry() {
                     Category
                   </th>
                   <th className="px-4 py-3 border-b font-semibold text-sm text-left">
-                    Backlog Quantity
+                    Stock Quantity
                   </th>
                   <th className="px-4 py-3 border-b font-semibold text-sm text-left">
                     Date Added
@@ -723,7 +834,7 @@ export default function StateBacklogEntry() {
                 {savedEntries.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="text-center py-8 text-gray-400">
-                      No saved state backlog entries yet.
+                      No saved state stock entries yet.
                     </td>
                   </tr>
                 ) : (

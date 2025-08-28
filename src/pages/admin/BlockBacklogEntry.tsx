@@ -19,7 +19,7 @@ import {
   Filter,
   X,
 } from "lucide-react";
-import { booksAPI, backlogAPI } from "@/lib/api";
+import { booksAPI, stockAPI } from "@/lib/api";
 
 // Types
 interface Book {
@@ -71,6 +71,19 @@ export default function BlockBacklogEntry() {
   const [filterSubject, setFilterSubject] = useState<string>("");
   const [filterCategory, setFilterCategory] = useState<string>("");
 
+  // Utility function to check if a book already exists
+  const isBookAlreadyExists = (bookId: string, excludeRowId?: string) => {
+    // Check in saved entries
+    const existsInSaved = savedEntries.some((entry) => entry.bookId === bookId);
+
+    // Check in current rows (excluding the specified row if provided)
+    const existsInRows = rows.some(
+      (row) => row.bookId === bookId && row.id !== excludeRowId,
+    );
+
+    return { existsInSaved, existsInRows };
+  };
+
   // Apply filters to books
   useEffect(() => {
     let filtered = books;
@@ -101,7 +114,7 @@ export default function BlockBacklogEntry() {
       try {
         const [booksResponse, savedEntriesResponse] = await Promise.all([
           booksAPI.getAll(),
-          backlogAPI.getByType("BLOCK", "160101"),
+          stockAPI.getAll({ type: "BLOCK", userId: "160101" }),
         ]);
 
         const booksData: Book[] = booksResponse.data.data;
@@ -146,11 +159,36 @@ export default function BlockBacklogEntry() {
     // Check if this book is already selected in existing saved entries
     const existingEntry = savedEntries.find((entry) => entry.bookId === bookId);
     if (existingEntry) {
-      const shouldContinue = window.confirm(
-        `This book "${selectedBook?.title}" already exists in your backlog entries with quantity ${existingEntry.quantity}. ` +
-          `If you continue, the quantity will be updated with your new value. Do you want to continue?`,
+      const shouldEdit = window.confirm(
+        `This book "${selectedBook?.title}" already exists in your saved block stock with quantity ${existingEntry.quantity}. ` +
+          `Do you want to edit the existing entry instead of creating a new one?`,
       );
-      if (!shouldContinue) {
+      if (shouldEdit) {
+        // Remove the current new row and edit the existing saved entry
+        setRows((prev) => prev.filter((row) => row.id !== rowId));
+
+        // Add the existing entry to rows for editing
+        setRows((prev) => [
+          ...prev,
+          {
+            id: existingEntry.id!,
+            bookId: existingEntry.bookId,
+            type: "BLOCK",
+            userId: "160101001", // Adjust this as needed
+            quantity: existingEntry.quantity.toString(),
+            book: existingEntry.book,
+            isEditing: true,
+            isNew: false,
+          },
+        ]);
+        return;
+      } else {
+        // User chose not to edit existing entry, reset the book selection
+        setRows((prev) =>
+          prev.map((row) =>
+            row.id === rowId ? { ...row, bookId: "", book: undefined } : row,
+          ),
+        );
         return;
       }
     }
@@ -160,10 +198,28 @@ export default function BlockBacklogEntry() {
       (row) => row.id !== rowId && row.bookId === bookId,
     );
     if (duplicateRow) {
-      alert(
-        `This book "${selectedBook?.title}" is already selected in another row. Please select a different book.`,
+      const shouldEdit = window.confirm(
+        `This book "${selectedBook?.title}" is already selected in another row. ` +
+          `Do you want to edit the existing row instead?`,
       );
-      return;
+      if (shouldEdit) {
+        // Remove the current new row and switch to editing the existing one
+        setRows((prev) => prev.filter((row) => row.id !== rowId));
+        setRows((prev) =>
+          prev.map((row) =>
+            row.id === duplicateRow.id ? { ...row, isEditing: true } : row,
+          ),
+        );
+        return;
+      } else {
+        // User chose not to edit existing row, reset the book selection
+        setRows((prev) =>
+          prev.map((row) =>
+            row.id === rowId ? { ...row, bookId: "", book: undefined } : row,
+          ),
+        );
+        return;
+      }
     }
 
     setRows((prev) =>
@@ -202,11 +258,35 @@ export default function BlockBacklogEntry() {
       return;
     }
 
+    // Additional validation: Check for duplicates if this is a new entry
+    if (row.isNew) {
+      const existingEntry = savedEntries.find(
+        (entry) => entry.bookId === row.bookId,
+      );
+      if (existingEntry) {
+        alert(
+          `This book "${row.book?.title}" already exists in your saved block stock. Please edit the existing entry instead of creating a new one.`,
+        );
+        return;
+      }
+
+      // Check for duplicates in other current rows
+      const duplicateInRows = rows.find(
+        (r) => r.id !== id && r.bookId === row.bookId && !r.isNew,
+      );
+      if (duplicateInRows) {
+        alert(
+          `This book "${row.book?.title}" is already being processed in another row. Please avoid duplicates.`,
+        );
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       if (row.isNew) {
         // Create or update entry
-        const entryResponse = await backlogAPI.create({
+        const entryResponse = await stockAPI.create({
           bookId: row.bookId,
           type: row.type,
           userId: row.userId,
@@ -225,18 +305,15 @@ export default function BlockBacklogEntry() {
         );
 
         // Refresh saved entries
-        const savedEntriesResponse = await backlogAPI.getByType(
-          "BLOCK",
-          "160101",
-        );
+        const savedEntriesResponse = await stockAPI.getAll({
+          type: "BLOCK",
+          userId: "160101",
+        });
         const savedEntriesData: BacklogEntry[] = savedEntriesResponse.data.data;
         setSavedEntries(savedEntriesData);
       } else {
         // Update existing entry
-        await backlogAPI.update(id, {
-          bookId: row.bookId,
-          type: row.type,
-          userId: row.userId,
+        await stockAPI.update(id, {
           quantity: parseInt(row.quantity),
         });
 
@@ -245,10 +322,10 @@ export default function BlockBacklogEntry() {
         );
 
         // Refresh saved entries
-        const savedEntriesResponse = await backlogAPI.getByType(
-          "BLOCK",
-          "160101",
-        );
+        const savedEntriesResponse = await stockAPI.getAll({
+          type: "BLOCK",
+          userId: "160101",
+        });
         const savedEntriesData: BacklogEntry[] = savedEntriesResponse.data.data;
         setSavedEntries(savedEntriesData);
       }
@@ -269,13 +346,13 @@ export default function BlockBacklogEntry() {
       try {
         if (!row.isNew) {
           // Delete from database if it's not a new entry
-          await backlogAPI.delete(id);
+          await stockAPI.delete(id);
 
           // Refresh saved entries
-          const savedEntriesResponse = await backlogAPI.getByType(
-            "BLOCK",
-            "160101",
-          );
+          const savedEntriesResponse = await stockAPI.getAll({
+            type: "BLOCK",
+            userId: "160101",
+          });
           const savedEntriesData: BacklogEntry[] =
             savedEntriesResponse.data.data;
           setSavedEntries(savedEntriesData);
@@ -302,11 +379,35 @@ export default function BlockBacklogEntry() {
       return;
     }
 
+    // Check for duplicates before saving
+    const bookIds = unsavedRows.map((row) => row.bookId);
+    const uniqueBookIds = new Set(bookIds);
+    if (bookIds.length !== uniqueBookIds.size) {
+      alert(
+        "Duplicate books detected in the rows to be saved. Please ensure each book appears only once.",
+      );
+      return;
+    }
+
+    // Check for duplicates with existing saved entries (for new entries only)
+    const newRows = unsavedRows.filter((row) => row.isNew);
+    for (const row of newRows) {
+      const existingEntry = savedEntries.find(
+        (entry) => entry.bookId === row.bookId,
+      );
+      if (existingEntry) {
+        alert(
+          `Book "${row.book?.title}" already exists in your saved block stock. Please remove it from the current rows or edit the existing entry instead.`,
+        );
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const promises = unsavedRows.map(async (row) => {
         if (row.isNew) {
-          const entry = await backlogAPI.create({
+          const entry = await stockAPI.create({
             bookId: row.bookId,
             type: "BLOCK",
             userId: "160101",
@@ -314,7 +415,7 @@ export default function BlockBacklogEntry() {
           });
           return { oldId: row.id, newId: entry.data.id! };
         } else {
-          await backlogAPI.update(row.id, {
+          await stockAPI.update(row.id, {
             quantity: parseInt(row.quantity),
           });
           return null;
@@ -340,10 +441,10 @@ export default function BlockBacklogEntry() {
       );
 
       // Refresh saved entries
-      const savedEntriesResponse = await backlogAPI.getByType(
-        "BLOCK",
-        "160101",
-      );
+      const savedEntriesResponse = await stockAPI.getAll({
+        type: "BLOCK",
+        userId: "160101",
+      });
       const savedEntriesData: BacklogEntry[] = savedEntriesResponse.data.data;
       setSavedEntries(savedEntriesData);
 
@@ -394,13 +495,13 @@ export default function BlockBacklogEntry() {
     }
 
     try {
-      await backlogAPI.delete(entryId);
+      await stockAPI.delete(entryId);
 
       // Refresh saved entries
-      const savedEntriesResponse = await backlogAPI.getByType(
-        "BLOCK",
-        "160101",
-      );
+      const savedEntriesResponse = await stockAPI.getAll({
+        type: "BLOCK",
+        userId: "160101",
+      });
       const savedEntriesData: BacklogEntry[] = savedEntriesResponse.data.data;
       setSavedEntries(savedEntriesData);
 
@@ -582,11 +683,39 @@ export default function BlockBacklogEntry() {
                               <SelectValue placeholder="Select book" />
                             </SelectTrigger>
                             <SelectContent>
-                              {filteredBooks.map((book) => (
-                                <SelectItem key={book.id} value={book.id}>
-                                  {book.title} ({book.class} - {book.subject})
-                                </SelectItem>
-                              ))}
+                              {filteredBooks.map((book) => {
+                                const { existsInSaved, existsInRows } =
+                                  isBookAlreadyExists(book.id, row.id);
+                                const isDisabled =
+                                  existsInSaved || existsInRows;
+
+                                return (
+                                  <SelectItem
+                                    key={book.id}
+                                    value={book.id}
+                                    disabled={isDisabled}
+                                    className={
+                                      isDisabled
+                                        ? "opacity-50 cursor-not-allowed"
+                                        : ""
+                                    }
+                                  >
+                                    <div className="flex items-center justify-between w-full">
+                                      <span>
+                                        {book.title} ({book.class} -{" "}
+                                        {book.subject})
+                                      </span>
+                                      {isDisabled && (
+                                        <span className="text-xs text-red-500 ml-2">
+                                          {existsInSaved
+                                            ? "(Already saved)"
+                                            : "(Already selected)"}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                );
+                              })}
                             </SelectContent>
                           </Select>
                         ) : (

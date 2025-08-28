@@ -1,83 +1,26 @@
 import AdminLayout from "@/components/AdminLayout";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { BookOpen, TrendingUp, Layers, Search, Plus } from "lucide-react";
 
-const initialStock = [
-  {
-    id: 1,
-    fy: "2023-24",
-    className: "Class 3",
-    subject: "Mathematics",
-    title: "Maths for Class 3",
-    quantity: 120,
-    received: 100,
-    remaining: 20,
-    requisitionAsked: 120,
-    left: 20,
-  },
-  {
-    id: 2,
-    fy: "2023-24",
-    className: "Class 4",
-    subject: "Science",
-    title: "Science Explorer",
-    quantity: 80,
-    received: 80,
-    remaining: 0,
-    requisitionAsked: 80,
-    left: 0,
-  },
-  {
-    id: 3,
-    fy: "2022-23",
-    className: "Class 5",
-    subject: "English",
-    title: "English Reader",
-    quantity: 60,
-    received: 50,
-    remaining: 10,
-    requisitionAsked: 60,
-    left: 10,
-  },
-];
-
 export default function ReceivedItems() {
   const [search, setSearch] = useState("");
-  const [stock, setStock] = useState(initialStock);
+  const [stock, setStock] = useState([]);
 
   const handleReceivedChange = (id, value) => {
     setStock((prevStock) =>
       prevStock.map((item) =>
-        item.id === id
-          ? { ...item, received: parseInt(value, 10) || 0 }
-          : item,
+        item.id === id ? { ...item, received: parseInt(value, 10) || 0 } : item,
       ),
     );
   };
 
   const handleAddRow = () => {
-    const newId = stock.length > 0 ? Math.max(...stock.map((item) => item.id)) + 1 : 1;
-    const newRow = {
-      id: newId,
-      fy: "2024-25",
-      className: "Class " + (stock.length + 1),
-      subject: "New Subject",
-      title: "New Book " + (stock.length + 1),
-      quantity: 0,
-      received: 0,
-      remaining: 0,
-      requisitionAsked: 100,
-      left: 100,
-    };
+    const newId =
+      stock.length > 0 ? Math.max(...stock.map((item) => item.id)) + 1 : 1;
+    const newRow = {};
     setStock((prevStock) => [...prevStock, newRow]);
   };
 
