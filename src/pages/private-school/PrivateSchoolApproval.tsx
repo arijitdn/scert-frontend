@@ -63,7 +63,9 @@ const initialPrivateSchools: PrivateSchool[] = [
 ];
 
 export default function PrivateSchoolApproval() {
-  const [schoolsToApprove, setSchoolsToApprove] = useState(initialPrivateSchools);
+  const [schoolsToApprove, setSchoolsToApprove] = useState(
+    initialPrivateSchools,
+  );
 
   const handleApprove = (id: string) => {
     setSchoolsToApprove((prev) => prev.filter((school) => school.id !== id));
@@ -79,33 +81,64 @@ export default function PrivateSchoolApproval() {
       <div className="grid grid-cols-1 gap-6">
         {schoolsToApprove.length === 0 ? (
           <Card className="w-full max-w-4xl mx-auto text-center py-12 shadow-lg border-green-300 bg-green-50">
-            <CardTitle className="text-green-700">No Private Schools Awaiting Approval</CardTitle>
-            <CardDescription className="text-green-600 mt-2">All schools are up to date!</CardDescription>
+            <CardTitle className="text-green-700">
+              No Private Schools Awaiting Approval
+            </CardTitle>
+            <CardDescription className="text-green-600 mt-2">
+              All schools are up to date!
+            </CardDescription>
           </Card>
         ) : (
           schoolsToApprove.map((school) => (
-            <Card key={school.id} className="w-full max-w-4xl mx-auto shadow-lg border-blue-300">
+            <Card
+              key={school.id}
+              className="w-full max-w-4xl mx-auto shadow-lg border-blue-300"
+            >
               <CardHeader>
-                <CardTitle className="text-xl font-bold text-blue-800">{school.schoolName}</CardTitle>
-                <CardDescription>UDISE Code: {school.udiseCode}</CardDescription>
+                <CardTitle className="text-xl font-bold text-blue-800">
+                  {school.schoolName}
+                </CardTitle>
+                <CardDescription>
+                  UDISE Code: {school.udiseCode}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   <div>
-                    <p><span className="font-semibold">Headmaster:</span> {school.headmasterName}</p>
-                    <p><span className="font-semibold">Email:</span> {school.email}</p>
-                    <p><span className="font-semibold">Phone:</span> {school.phone}</p>
+                    <p>
+                      <span className="font-semibold">Headmaster:</span>{" "}
+                      {school.headmasterName}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Email:</span>{" "}
+                      {school.email}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Phone:</span>{" "}
+                      {school.phone}
+                    </p>
                   </div>
                   <div>
-                    <p><span className="font-semibold">District:</span> {school.district}</p>
-                    <p><span className="font-semibold">Block:</span> {school.block}</p>
-                    <p><span className="font-semibold">Category:</span> {school.category}</p>
-                    <p><span className="font-semibold">Type:</span> {school.type}</p>
+                    <p>
+                      <span className="font-semibold">District:</span>{" "}
+                      {school.district}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Block:</span>{" "}
+                      {school.block}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Category:</span>{" "}
+                      {school.category}
+                    </p>
+                    <p>
+                      <span className="font-semibold">Type:</span> {school.type}
+                    </p>
                   </div>
                 </div>
                 <div className="flex justify-end gap-2 mt-4">
                   <Button
-                    variant="success"
+                    variant="default"
                     onClick={() => handleApprove(school.id)}
                     className="flex items-center gap-1 bg-green-600 hover:bg-green-700"
                   >
