@@ -9,59 +9,59 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
-import StateLevelDashboard from "./pages/admin/StateLevelDashboard";
-import DistrictLevelDashboard from "./pages/admin/DistrictLevelDashboard";
-import BlockLevelDashboard from "./pages/admin/BlockLevelDashboard";
-import SchoolLevelDashboard from "./pages/admin/SchoolLevelDashboard";
-import RegistrationOfBooks from "./pages/admin/RegistrationOfBooks";
-import StateReceivedItems from "./pages/admin/StateReceivedItems";
+import StateLevelDashboard from "./pages/state/StateLevelDashboard";
+import DistrictLevelDashboard from "./pages/district/DistrictLevelDashboard";
+import BlockLevelDashboard from "./pages/block/BlockLevelDashboard";
+import SchoolLevelDashboard from "./pages/school/SchoolLevelDashboard";
+import RegistrationOfBooks from "./pages/state/RegistrationOfBooks";
+import StateReceivedItems from "./pages/state/StateReceivedItems";
 
-import Issues from "./pages/admin/Issues";
-import SchoolIssues from "./pages/admin/SchoolIssues";
-import Notifications from "./pages/admin/Notifications";
-import Requisition from "./pages/admin/Requisition";
-import SchoolLoginCredentials from "./pages/admin/SchoolLoginCredentials";
-import SchoolRequisition from "./pages/admin/SchoolRequisition";
-import SchoolNotifications from "./pages/admin/SchoolNotifications";
-import SchoolReceived from "./pages/admin/SchoolReceived";
-import SchoolDistribute from "./pages/admin/SchoolDistribute";
-import BlockLoginCredentials from "./pages/admin/BlockLoginCredentials";
-import BlockCreateProfile from "./pages/admin/BlockCreateProfile";
-import BlockRequisition from "./pages/admin/BlockRequisition";
-import BlockNotifications from "./pages/admin/BlockNotifications";
-import DistrictProfile from "./pages/admin/DistrictProfile";
-import DistrictCreateProfile from "./pages/admin/DistrictCreateProfile";
-import DistrictRequisition from "./pages/admin/DistrictRequisition";
-import DistrictNotifications from "./pages/admin/DistrictNotifications";
-import BlockIssues from "./pages/admin/BlockIssues";
-import DistrictIssues from "./pages/admin/DistrictIssues";
-import SchoolNotificationsCreate from "./pages/admin/SchoolNotificationsCreate";
-import SchoolProfile from "./pages/admin/SchoolProfile";
-import BlockProfile from "./pages/admin/BlockProfile";
-import BlockSchoolDetails from "./pages/admin/BlockSchoolDetails";
-import RequisitionWindow from "./pages/admin/RequisitionWindow";
-import Reports from "./pages/admin/Reports";
-import StateEChallan from "./pages/admin/StateEChallan";
-import DistrictEChallan from "./pages/admin/DistrictEChallan";
-import BlockEChallan from "./pages/admin/BlockEChallan";
-import SchoolList from "./pages/admin/SchoolList";
-import DistrictDetails from "./pages/admin/DistrictDetails";
-import PrivateSchoolDashboard from "./pages/admin/PrivateSchoolDashboard";
-import PrivateSchoolProfile from "./pages/admin/PrivateSchoolProfile";
-import PrivateSchoolRequisition from "./pages/admin/PrivateSchoolRequisition";
-import PrivateSchoolReceived from "./pages/admin/PrivateSchoolReceived";
-import PrivateSchoolIssues from "./pages/admin/PrivateSchoolIssues";
-import PrivateSchoolNotifications from "./pages/admin/PrivateSchoolNotifications";
-import CreatePrivateSchool from "./pages/admin/CreatePrivateSchool";
-import PrivateSchoolApproval from "./pages/admin/PrivateSchoolApproval";
-import StateBacklogEntry from "./pages/admin/StateBacklogEntry";
-import DistrictBacklogEntry from "./pages/admin/DistrictBacklogEntry";
-import BlockBacklogEntry from "./pages/admin/BlockBacklogEntry";
-import SchoolBacklogEntry from "./pages/admin/SchoolBacklogEntry";
-import ChartsVisualization from "./pages/admin/ChartsVisualization";
-import EditProfile from "./pages/admin/EditProfile";
-import DistrictReceived from "./pages/admin/DistrictReceived";
-import BlockReceived from "./pages/admin/BlockReceived";
+import Issues from "./pages/state/Issues";
+import SchoolIssues from "./pages/school/SchoolIssues";
+import Notifications from "./pages/state/Notifications";
+import Requisition from "./pages/state/Requisition";
+import SchoolLoginCredentials from "./pages/school/SchoolLoginCredentials";
+import SchoolRequisition from "./pages/school/SchoolRequisition";
+import SchoolNotifications from "./pages/school/SchoolNotifications";
+import SchoolReceived from "./pages/school/SchoolReceived";
+import SchoolDistribute from "./pages/school/SchoolDistribute";
+import BlockLoginCredentials from "./pages/block/BlockLoginCredentials";
+import BlockCreateProfile from "./pages/block/BlockCreateProfile";
+import BlockRequisition from "./pages/block/BlockRequisition";
+import BlockNotifications from "./pages/block/BlockNotifications";
+import DistrictProfile from "./pages/district/DistrictProfile";
+import DistrictCreateProfile from "./pages/district/DistrictCreateProfile";
+import DistrictRequisition from "./pages/district/DistrictRequisition";
+import DistrictNotifications from "./pages/district/DistrictNotifications";
+import BlockIssues from "./pages/block/BlockIssues";
+import DistrictIssues from "./pages/district/DistrictIssues";
+import SchoolNotificationsCreate from "./pages/school/SchoolNotificationsCreate";
+import SchoolProfile from "./pages/school/SchoolProfile";
+import BlockProfile from "./pages/block/BlockProfile";
+import BlockSchoolDetails from "./pages/block/BlockSchoolDetails";
+import RequisitionWindow from "./pages/state/RequisitionWindow";
+import Reports from "./pages/state/Reports";
+import StateEChallan from "./pages/state/StateEChallan";
+import DistrictEChallan from "./pages/district/DistrictEChallan";
+import BlockEChallan from "./pages/block/BlockEChallan";
+import SchoolList from "./pages/school/SchoolList";
+import DistrictDetails from "./pages/district/DistrictDetails";
+import PrivateSchoolDashboard from "./pages/private-school/PrivateSchoolDashboard";
+import PrivateSchoolProfile from "./pages/private-school/PrivateSchoolProfile";
+import PrivateSchoolRequisition from "./pages/private-school/PrivateSchoolRequisition";
+import PrivateSchoolReceived from "./pages/private-school/PrivateSchoolReceived";
+import PrivateSchoolIssues from "./pages/private-school/PrivateSchoolIssues";
+import PrivateSchoolNotifications from "./pages/private-school/PrivateSchoolNotifications";
+import CreatePrivateSchool from "./pages/district/CreatePrivateSchool";
+import PrivateSchoolApproval from "./pages/private-school/PrivateSchoolApproval";
+import StateBacklogEntry from "./pages/state/StateBacklogEntry";
+import DistrictBacklogEntry from "./pages/district/DistrictBacklogEntry";
+import BlockBacklogEntry from "./pages/block/BlockBacklogEntry";
+import SchoolBacklogEntry from "./pages/school/SchoolBacklogEntry";
+import ChartsVisualization from "./pages/state/ChartsVisualization";
+import EditProfile from "./pages/state/EditProfile";
+import DistrictReceived from "./pages/district/DistrictReceived";
+import BlockReceived from "./pages/block/BlockReceived";
 
 const queryClient = new QueryClient();
 
@@ -203,10 +203,7 @@ const App = () => (
             path="/admin/school/notifications"
             element={<SchoolNotifications />}
           />
-          <Route
-            path="/admin/school/received"
-            element={<SchoolReceived adminLevel={""} />}
-          />
+          <Route path="/admin/school/received" element={<SchoolReceived />} />
           <Route
             path="/admin/school/distribute"
             element={<SchoolDistribute />}

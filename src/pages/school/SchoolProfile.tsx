@@ -26,6 +26,14 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSchoolData } from "@/hooks/useSchoolData";
+import { CLASS_OPTIONS } from "@/lib/constants";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function SchoolProfile() {
   const SCHOOL_UDISE = "16010100108"; // The specific UDISE we want to show
@@ -58,7 +66,7 @@ export default function SchoolProfile() {
   const [editValue, setEditValue] = useState(0);
   const [addingClass, setAddingClass] = useState(false);
   const [newClassName, setNewClassName] = useState("");
-  const [newClassCount, setNewClassCount] = useState(0);
+  const [newClassCount, setNewClassCount] = useState<number>();
   const [enrollmentLoading, setEnrollmentLoading] = useState(false);
 
   const handleEdit = () => {
@@ -117,6 +125,14 @@ export default function SchoolProfile() {
       setNewClassCount(0);
     }
     setEnrollmentLoading(false);
+  };
+
+  // Get unused class options
+  const getUnusedClassOptions = () => {
+    const existingClasses = enrollments.map((e) => e.class);
+    return CLASS_OPTIONS.filter(
+      (classOption) => !existingClasses.includes(classOption),
+    );
   };
 
   const handleDeleteClass = async (enrollmentId: string) => {
@@ -445,7 +461,11 @@ export default function SchoolProfile() {
               onClick={() => setAddingClass(true)}
               size="sm"
               className="flex items-center gap-2"
-              disabled={addingClass || enrollmentLoading}
+              disabled={
+                addingClass ||
+                enrollmentLoading ||
+                getUnusedClassOptions().length === 0
+              }
             >
               <Plus className="h-4 w-4" />
               Add Class
@@ -464,12 +484,18 @@ export default function SchoolProfile() {
             <div className="space-y-4">
               {addingClass && (
                 <div className="flex gap-2 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                  <Input
-                    placeholder="Class name (e.g., Class 1)"
-                    value={newClassName}
-                    onChange={(e) => setNewClassName(e.target.value)}
-                    className="flex-1"
-                  />
+                  <Select value={newClassName} onValueChange={setNewClassName}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Select a class" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {getUnusedClassOptions().map((classOption) => (
+                        <SelectItem key={classOption} value={classOption}>
+                          {classOption}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Input
                     type="number"
                     placeholder="Student count"
@@ -515,6 +541,12 @@ export default function SchoolProfile() {
                     Add class enrollments to enable book requisitions
                   </p>
                 </div>
+              ) : getUnusedClassOptions().length === 0 ? (
+                <div className="text-center py-4 text-gray-500">
+                  <p className="text-sm">
+                    All available classes (Class 1 - Class 12) have been added
+                  </p>
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full border-collapse border border-purple-200">
@@ -525,9 +557,6 @@ export default function SchoolProfile() {
                         </th>
                         <th className="border border-purple-200 px-4 py-2 text-left text-purple-900 font-semibold">
                           Students
-                        </th>
-                        <th className="border border-purple-200 px-4 py-2 text-left text-purple-900 font-semibold">
-                          Max Books per Subject
                         </th>
                         <th className="border border-purple-200 px-4 py-2 text-center text-purple-900 font-semibold">
                           Actions
@@ -559,9 +588,6 @@ export default function SchoolProfile() {
                                 {enrollment.students}
                               </span>
                             )}
-                          </td>
-                          <td className="border border-purple-200 px-4 py-2 text-green-600 font-semibold">
-                            {editIdx === idx ? editValue : enrollment.students}
                           </td>
                           <td className="border border-purple-200 px-4 py-2 text-center">
                             {editIdx === idx ? (

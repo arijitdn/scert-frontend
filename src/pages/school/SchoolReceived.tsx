@@ -171,6 +171,7 @@ export default function SchoolReceived() {
         bookId: selectedBook,
         type: "RECEIVED",
         quantity: parseInt(quantity),
+        userId: "",
       });
 
       toast({
@@ -218,7 +219,7 @@ export default function SchoolReceived() {
 
   if (loading) {
     return (
-      <AdminLayout>
+      <AdminLayout title={""} description={""}>
         <div className="flex items-center justify-center h-64">
           <Loader2 className="h-8 w-8 animate-spin" />
           <span className="ml-2">Loading received data...</span>
