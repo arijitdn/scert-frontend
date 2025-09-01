@@ -16,6 +16,8 @@ import type {
   Requisition,
   ClassEnrollment,
 } from "@/types/database";
+import { useRequisitionWindow } from "@/hooks/useRequisitionWindow";
+import { RequisitionWindowStatus } from "@/components/RequisitionWindowStatus";
 
 // Types
 interface Book {
@@ -48,6 +50,9 @@ export default function SchoolRequisition() {
     [],
   );
   const [schoolStock, setSchoolStock] = useState<StockWithBook[]>([]);
+
+  // Requisition window status
+  const windowStatus = useRequisitionWindow("SCHOOL");
   const [currentRequisitions, setCurrentRequisitions] = useState<
     Array<{
       bookId: string;
@@ -393,14 +398,39 @@ export default function SchoolRequisition() {
         </CardContent>
       </Card>
 
+      {/* Requisition Window Status */}
+      <RequisitionWindowStatus
+        isOpen={windowStatus.isOpen}
+        hasStarted={windowStatus.hasStarted}
+        hasEnded={windowStatus.hasEnded}
+        startDate={windowStatus.startDate}
+        endDate={windowStatus.endDate}
+        message={windowStatus.message}
+        loading={windowStatus.loading}
+        error={windowStatus.error}
+        className="mb-6"
+      />
+
       {/* Create New Requisition */}
-      <Card className="w-full max-w-4xl mx-auto bg-gradient-to-br from-green-100 to-green-50 border-green-300 mb-8">
+      <Card
+        className={`w-full max-w-4xl mx-auto mb-8 transition-all ${
+          windowStatus.isOpen
+            ? "bg-gradient-to-br from-green-100 to-green-50 border-green-300"
+            : "bg-gradient-to-br from-gray-100 to-gray-50 border-gray-300"
+        }`}
+      >
         <CardHeader>
-          <CardTitle className="text-lg text-green-900">
+          <CardTitle
+            className={`text-lg ${
+              windowStatus.isOpen ? "text-green-900" : "text-gray-600"
+            }`}
+          >
             Create New Requisition
           </CardTitle>
           <CardDescription>
-            Select books step by step to create a requisition
+            {windowStatus.isOpen
+              ? "Select books step by step to create a requisition"
+              : "Requisition window is currently closed"}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -414,6 +444,7 @@ export default function SchoolRequisition() {
                   value={selectedClass}
                   onChange={(e) => setSelectedClass(e.target.value)}
                   required
+                  disabled={!windowStatus.isOpen}
                 >
                   <option value="">Select Class</option>
                   {classes.map((cls) => (
@@ -434,7 +465,7 @@ export default function SchoolRequisition() {
                   value={selectedSubject}
                   onChange={(e) => setSelectedSubject(e.target.value)}
                   required
-                  disabled={!selectedClass}
+                  disabled={!selectedClass || !windowStatus.isOpen}
                 >
                   <option value="">Select Subject</option>
                   {subjects.map((subject) => (
@@ -453,7 +484,7 @@ export default function SchoolRequisition() {
                   value={selectedBook}
                   onChange={(e) => setSelectedBook(e.target.value)}
                   required
-                  disabled={!selectedSubject}
+                  disabled={!selectedSubject || !windowStatus.isOpen}
                 >
                   <option value="">Select Book</option>
                   {books.map((book) => (
@@ -465,8 +496,19 @@ export default function SchoolRequisition() {
               </div>
             </div>
 
+            {!windowStatus.isOpen && (
+              <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 text-center">
+                <p className="text-gray-600 font-medium">
+                  Requisition submission is currently disabled
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {windowStatus.message}
+                </p>
+              </div>
+            )}
+
             {/* Show class student count */}
-            {selectedClass && (
+            {selectedClass && windowStatus.isOpen && (
               <div className="text-sm text-gray-700 bg-green-50 p-3 rounded">
                 <strong>Students in {selectedClass}:</strong>{" "}
                 {getClassStudentCount()} students
@@ -474,46 +516,51 @@ export default function SchoolRequisition() {
             )}
 
             {/* Show current stock for selected book */}
-            {selectedBook && (
+            {selectedBook && windowStatus.isOpen && (
               <div className="text-sm text-gray-700 bg-blue-50 p-3 rounded">
                 <strong>Current Stock:</strong> {getBookStock()} books available
               </div>
             )}
 
             {/* Quantity Input */}
-            <div className="max-w-xs">
-              <label className="block text-sm font-medium mb-1">
-                Quantity Requested
-              </label>
-              <Input
-                type="number"
-                min={1}
-                max={getClassStudentCount()}
-                placeholder="Number of books needed"
-                value={quantity}
-                onChange={(e) => setQuantity(e.target.value)}
-                required
-                disabled={!selectedBook}
-              />
-              {selectedClass && getClassStudentCount() > 0 && (
-                <p className="text-xs text-gray-600 mt-1">
-                  Maximum: {getClassStudentCount()} (based on class enrollment)
-                </p>
-              )}
-            </div>
+            {windowStatus.isOpen && (
+              <div className="max-w-xs">
+                <label className="block text-sm font-medium mb-1">
+                  Quantity Requested
+                </label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={getClassStudentCount()}
+                  placeholder="Number of books needed"
+                  value={quantity}
+                  onChange={(e) => setQuantity(e.target.value)}
+                  required
+                  disabled={!selectedBook}
+                />
+                {selectedClass && getClassStudentCount() > 0 && (
+                  <p className="text-xs text-gray-600 mt-1">
+                    Maximum: {getClassStudentCount()} (based on class
+                    enrollment)
+                  </p>
+                )}
+              </div>
+            )}
 
-            <Button
-              type="submit"
-              disabled={
-                !selectedBook ||
-                !quantity ||
-                parseInt(quantity) <= 0 ||
-                parseInt(quantity) > getClassStudentCount()
-              }
-              className="max-w-xs"
-            >
-              Add to Requisition
-            </Button>
+            {windowStatus.isOpen && (
+              <Button
+                type="submit"
+                disabled={
+                  !selectedBook ||
+                  !quantity ||
+                  parseInt(quantity) <= 0 ||
+                  parseInt(quantity) > getClassStudentCount()
+                }
+                className="max-w-xs"
+              >
+                Add to Requisition
+              </Button>
+            )}
           </form>
         </CardContent>
       </Card>
@@ -572,9 +619,17 @@ export default function SchoolRequisition() {
           <Button
             onClick={handleSubmitAll}
             className="w-full"
-            disabled={currentRequisitions.length === 0 || submitting}
+            disabled={
+              currentRequisitions.length === 0 ||
+              submitting ||
+              !windowStatus.isOpen
+            }
           >
-            {submitting ? "Submitting..." : "Submit All Requisitions"}
+            {submitting
+              ? "Submitting..."
+              : !windowStatus.isOpen
+                ? "Submission Disabled - Window Closed"
+                : "Submit All Requisitions"}
           </Button>
         </CardContent>
       </Card>

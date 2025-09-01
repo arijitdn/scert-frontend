@@ -16,6 +16,8 @@ import { useState, useEffect } from "react";
 import { requisitionsAPI, schoolsAPI } from "@/lib/api";
 import type { Requisition, School } from "@/types/database";
 import { useToast } from "@/hooks/use-toast";
+import { useRequisitionWindow } from "@/hooks/useRequisitionWindow";
+import { RequisitionWindowStatus } from "@/components/RequisitionWindowStatus";
 
 const block_code = "160101"; // Block code for the authenticated block admin
 
@@ -27,6 +29,9 @@ export default function BlockRequisition() {
   const [updating, setUpdating] = useState<{ [key: string]: boolean }>({});
   const [activeTab, setActiveTab] = useState("pending");
   const { toast } = useToast();
+
+  // Requisition window status
+  const windowStatus = useRequisitionWindow("BLOCK");
 
   // Load block requisitions
   useEffect(() => {
@@ -290,7 +295,7 @@ export default function BlockRequisition() {
               onChange={(e) => handleRemarkChange(req.id, e.target.value)}
               placeholder="Add remarks for this requisition... (Required for approval)"
               className="mb-2"
-              disabled={updating[req.id]}
+              disabled={updating[req.id] || !windowStatus.isOpen}
             />
           ) : (
             <div className="p-3 bg-gray-50 rounded border">
@@ -316,7 +321,7 @@ export default function BlockRequisition() {
           {req.status === "PENDING_BLOCK_APPROVAL" && (
             <Button
               onClick={() => handleSendRemark(req.id)}
-              disabled={updating[req.id]}
+              disabled={updating[req.id] || !windowStatus.isOpen}
               className="bg-green-600 hover:bg-green-700"
             >
               {updating[req.id] ? (
@@ -324,7 +329,7 @@ export default function BlockRequisition() {
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4 mr-1" />
-                  Send Remark
+                  {!windowStatus.isOpen ? "Disabled" : "Send Remark"}
                 </>
               )}
             </Button>
@@ -361,7 +366,31 @@ export default function BlockRequisition() {
       description="Review and approve requisitions from schools in your block"
       adminLevel="BLOCK ADMIN"
     >
+      {/* Requisition Window Status */}
+      <RequisitionWindowStatus
+        isOpen={windowStatus.isOpen}
+        hasStarted={windowStatus.hasStarted}
+        hasEnded={windowStatus.hasEnded}
+        startDate={windowStatus.startDate}
+        endDate={windowStatus.endDate}
+        message={windowStatus.message}
+        loading={windowStatus.loading}
+        error={windowStatus.error}
+        className="mb-6"
+      />
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        {!windowStatus.isOpen && (
+          <div className="mb-4 p-4 bg-gray-100 border border-gray-300 rounded-lg text-center">
+            <p className="text-gray-600 font-medium">
+              Block requisition actions are currently disabled
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              You can view requisitions but cannot approve or reject them
+              outside the active window.
+            </p>
+          </div>
+        )}
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="pending" className="flex items-center gap-2">
             <Clock className="w-4 h-4" />

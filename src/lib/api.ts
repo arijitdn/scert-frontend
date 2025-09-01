@@ -268,4 +268,17 @@ export const reportsAPI = {
     api.get("/reports/detailed-is-wise", { params }),
 };
 
+// Requisition Windows API
+export const requisitionWindowsAPI = {
+  getAll: () => api.get("/requisition-windows"),
+  getByType: (type: string) => api.get(`/requisition-windows/type/${type}`),
+  checkStatus: (type: string) => api.get(`/requisition-windows/status/${type}`),
+  createOrUpdate: (data: {
+    type: string;
+    startDate: string;
+    endDate: string;
+  }) => api.post("/requisition-windows", data),
+  delete: (id: string) => api.delete(`/requisition-windows/${id}`),
+};
+
 export default api;

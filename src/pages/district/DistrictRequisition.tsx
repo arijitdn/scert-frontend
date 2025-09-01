@@ -18,6 +18,8 @@ import type {
   RequisitionStatus,
   School,
 } from "@/types/database";
+import { useRequisitionWindow } from "@/hooks/useRequisitionWindow";
+import { RequisitionWindowStatus } from "@/components/RequisitionWindowStatus";
 
 const DISTRICT_ID = "1601"; // District code extracted from school ID pattern
 
@@ -30,6 +32,9 @@ export default function DistrictRequisition() {
   const [remarks, setRemarks] = useState<{ [key: string]: string }>({});
   const [updating, setUpdating] = useState<{ [key: string]: boolean }>({});
   const [activeTab, setActiveTab] = useState("pending");
+
+  // Requisition window status
+  const windowStatus = useRequisitionWindow("DISTRICT");
 
   // Load district requisitions
   useEffect(() => {
@@ -287,7 +292,7 @@ export default function DistrictRequisition() {
             <>
               <Button
                 onClick={() => handleStatusUpdate(req.id, "APPROVED")}
-                disabled={updating[req.id]}
+                disabled={updating[req.id] || !windowStatus.isOpen}
                 className="bg-green-600 hover:bg-green-700"
               >
                 {updating[req.id] ? "Updating..." : "Approve"}
@@ -296,7 +301,7 @@ export default function DistrictRequisition() {
                 onClick={() =>
                   handleStatusUpdate(req.id, "REJECTED_BY_DISTRICT")
                 }
-                disabled={updating[req.id]}
+                disabled={updating[req.id] || !windowStatus.isOpen}
                 variant="destructive"
               >
                 {updating[req.id] ? "Updating..." : "Reject"}
@@ -307,7 +312,7 @@ export default function DistrictRequisition() {
           {req.status === "REJECTED_BY_DISTRICT" && (
             <Button
               onClick={() => handleStatusUpdate(req.id, "APPROVED")}
-              disabled={updating[req.id]}
+              disabled={updating[req.id] || !windowStatus.isOpen}
               className="bg-green-600 hover:bg-green-700"
             >
               {updating[req.id] ? "Updating..." : "Re-approve"}
@@ -386,7 +391,31 @@ export default function DistrictRequisition() {
       description="Review and approve requisitions from all schools in your district"
       adminLevel="DISTRICT ADMIN"
     >
+      {/* Requisition Window Status */}
+      <RequisitionWindowStatus
+        isOpen={windowStatus.isOpen}
+        hasStarted={windowStatus.hasStarted}
+        hasEnded={windowStatus.hasEnded}
+        startDate={windowStatus.startDate}
+        endDate={windowStatus.endDate}
+        message={windowStatus.message}
+        loading={windowStatus.loading}
+        error={windowStatus.error}
+        className="mb-6"
+      />
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        {!windowStatus.isOpen && (
+          <div className="mb-4 p-4 bg-gray-100 border border-gray-300 rounded-lg text-center">
+            <p className="text-gray-600 font-medium">
+              District requisition actions are currently disabled
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              You can view requisitions but cannot approve or reject them
+              outside the active window.
+            </p>
+          </div>
+        )}
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger
             value="pending"

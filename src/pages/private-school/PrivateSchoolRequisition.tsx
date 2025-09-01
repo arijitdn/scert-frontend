@@ -9,6 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
+import { useRequisitionWindow } from "@/hooks/useRequisitionWindow";
+import { RequisitionWindowStatus } from "@/components/RequisitionWindowStatus";
 
 const classOptions = ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5"];
 const subjectOptions = [
@@ -21,27 +23,52 @@ const subjectOptions = [
 // Dummy stock data per class
 const stockPerClass = {
   "Class 1": [
-    { subject: "Mathematics", book: "Maths for Class 1", stock: 12, price: 150 },
+    {
+      subject: "Mathematics",
+      book: "Maths for Class 1",
+      stock: 12,
+      price: 150,
+    },
     { subject: "English", book: "English Reader 1", stock: 10, price: 120 },
     { subject: "Hindi", book: "Hindi Basics 1", stock: 8, price: 100 },
   ],
   "Class 2": [
-    { subject: "Mathematics", book: "Maths for Class 2", stock: 15, price: 160 },
+    {
+      subject: "Mathematics",
+      book: "Maths for Class 2",
+      stock: 15,
+      price: 160,
+    },
     { subject: "English", book: "English Reader 2", stock: 11, price: 130 },
     { subject: "Hindi", book: "Hindi Basics 2", stock: 9, price: 110 },
   ],
   "Class 3": [
-    { subject: "Mathematics", book: "Maths for Class 3", stock: 20, price: 170 },
+    {
+      subject: "Mathematics",
+      book: "Maths for Class 3",
+      stock: 20,
+      price: 170,
+    },
     { subject: "Science", book: "Science Explorer", stock: 10, price: 180 },
     { subject: "English", book: "English Reader", stock: 15, price: 140 },
   ],
   "Class 4": [
-    { subject: "Mathematics", book: "Maths for Class 4", stock: 18, price: 180 },
+    {
+      subject: "Mathematics",
+      book: "Maths for Class 4",
+      stock: 18,
+      price: 180,
+    },
     { subject: "Science", book: "Science Explorer 4", stock: 12, price: 190 },
     { subject: "English", book: "English Reader 4", stock: 13, price: 150 },
   ],
   "Class 5": [
-    { subject: "Mathematics", book: "Maths for Class 5", stock: 16, price: 190 },
+    {
+      subject: "Mathematics",
+      book: "Maths for Class 5",
+      stock: 16,
+      price: 190,
+    },
     { subject: "Science", book: "Science Explorer 5", stock: 14, price: 200 },
     { subject: "English", book: "English Reader 5", stock: 12, price: 160 },
   ],
@@ -82,13 +109,19 @@ export default function PrivateSchoolRequisition() {
   const [quantity, setQuantity] = useState("");
   const [selectedStockClass, setSelectedStockClass] = useState(classOptions[0]);
 
+  // Requisition window status
+  const windowStatus = useRequisitionWindow("SCHOOL");
+
   // Find stock for selected book
   const allBooks = Object.values(stockPerClass).flat();
   const selectedBookDetails = selectedBook
     ? allBooks.find((b) => b.book === selectedBook)
     : null;
-  const selectedBookPrice = selectedBookDetails ? selectedBookDetails.price : null;
-  const totalPrice = selectedBookPrice && quantity ? selectedBookPrice * Number(quantity) : 0;
+  const selectedBookPrice = selectedBookDetails
+    ? selectedBookDetails.price
+    : null;
+  const totalPrice =
+    selectedBookPrice && quantity ? selectedBookPrice * Number(quantity) : 0;
   // Get number of students in selected class
   const selectedClassStudents = selectedClass
     ? studentsPerClass[selectedClass]
@@ -121,20 +154,59 @@ export default function PrivateSchoolRequisition() {
       description="Request new books for your private school and track requisition status"
       adminLevel={null}
     >
-      <Card className="w-full max-w-2xl mx-auto bg-gradient-to-br from-green-100 to-green-50 border-green-300 mb-8">
+      {/* Requisition Window Status */}
+      <RequisitionWindowStatus
+        isOpen={windowStatus.isOpen}
+        hasStarted={windowStatus.hasStarted}
+        hasEnded={windowStatus.hasEnded}
+        startDate={windowStatus.startDate}
+        endDate={windowStatus.endDate}
+        message={windowStatus.message}
+        loading={windowStatus.loading}
+        error={windowStatus.error}
+        className="mb-6"
+      />
+
+      <Card
+        className={`w-full max-w-2xl mx-auto mb-8 transition-all ${
+          windowStatus.isOpen
+            ? "bg-gradient-to-br from-green-100 to-green-50 border-green-300"
+            : "bg-gradient-to-br from-gray-100 to-gray-50 border-gray-300"
+        }`}
+      >
         <CardHeader>
-          <CardTitle className="text-lg text-green-900">
+          <CardTitle
+            className={`text-lg ${
+              windowStatus.isOpen ? "text-green-900" : "text-gray-600"
+            }`}
+          >
             Create New Requisition
           </CardTitle>
+          <CardDescription>
+            {windowStatus.isOpen
+              ? "Request new books for your private school"
+              : "Requisition window is currently closed"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+            {!windowStatus.isOpen && (
+              <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 text-center">
+                <p className="text-gray-600 font-medium">
+                  Requisition submission is currently disabled
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {windowStatus.message}
+                </p>
+              </div>
+            )}
             <div className="flex flex-col md:flex-row gap-4 flex-wrap items-center">
               <select
                 className="border rounded px-3 py-2 bg-background"
                 value={selectedClass}
                 onChange={(e) => setSelectedClass(e.target.value)}
                 required
+                disabled={!windowStatus.isOpen}
               >
                 <option value="">Select Class</option>
                 {classOptions.map((opt) => (
@@ -148,6 +220,7 @@ export default function PrivateSchoolRequisition() {
                 value={selectedSubject}
                 onChange={(e) => setSelectedSubject(e.target.value)}
                 required
+                disabled={!windowStatus.isOpen}
               >
                 <option value="">Select Subject</option>
                 {subjectOptions.map((opt) => (
@@ -161,6 +234,7 @@ export default function PrivateSchoolRequisition() {
                 value={selectedBook}
                 onChange={(e) => setSelectedBook(e.target.value)}
                 required
+                disabled={!windowStatus.isOpen}
               >
                 <option value="">Select Book Name</option>
                 {allBooks.map((b) => (
@@ -171,7 +245,7 @@ export default function PrivateSchoolRequisition() {
               </select>
             </div>
             {/* Show number of students and stock available after selections */}
-            {selectedClass && (
+            {selectedClass && windowStatus.isOpen && (
               <div className="flex gap-8 text-sm text-gray-700">
                 <div>
                   Number of Students in {selectedClass}:{" "}
@@ -185,21 +259,26 @@ export default function PrivateSchoolRequisition() {
                 )}
               </div>
             )}
-            {selectedBookDetails && quantity && (
+            {selectedBookDetails && quantity && windowStatus.isOpen && (
               <div className="text-sm text-gray-700">
-                Total Price: <span className="font-semibold">₹{totalPrice}</span>
+                Total Price:{" "}
+                <span className="font-semibold">₹{totalPrice}</span>
               </div>
             )}
-            <Input
-              type="number"
-              min={1}
-              placeholder="Number of books needed"
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              className="max-w-xs"
-              required
-            />
-            <Button type="submit">Pay Online and Create Requisition</Button>
+            {windowStatus.isOpen && (
+              <Input
+                type="number"
+                min={1}
+                placeholder="Number of books needed"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="max-w-xs"
+                required
+              />
+            )}
+            {windowStatus.isOpen && (
+              <Button type="submit">Pay Online and Create Requisition</Button>
+            )}
           </form>
         </CardContent>
       </Card>
