@@ -87,7 +87,7 @@ export default function SchoolRequisition() {
       setSchool(schoolData);
 
       // Load all books to get unique classes
-      const booksResponse = await booksAPI.getAll();
+      const booksResponse = await booksAPI.getAll({ enabled_only: true });
       const allBooks: Book[] = booksResponse.data.data;
       const uniqueClasses = [...new Set(allBooks.map((book) => book.class))];
       setClasses(uniqueClasses);
@@ -134,7 +134,10 @@ export default function SchoolRequisition() {
 
   const loadSubjects = async () => {
     try {
-      const booksResponse = await booksAPI.getAll({ class: selectedClass });
+      const booksResponse = await booksAPI.getAll({
+        class: selectedClass,
+        enabled_only: true,
+      });
       const classBooks: Book[] = booksResponse.data.data;
       const uniqueSubjects = [
         ...new Set(classBooks.map((book) => book.subject)),
@@ -163,6 +166,7 @@ export default function SchoolRequisition() {
       const booksResponse = await booksAPI.getAll({
         class: selectedClass,
         subject: selectedSubject,
+        enabled_only: true,
       });
       const filteredBooks: Book[] = booksResponse.data.data;
       setBooks(filteredBooks);

@@ -92,7 +92,7 @@ export default function SchoolBacklogEntry() {
       setLoading(true);
       try {
         const [booksResponse, savedEntriesResponse] = await Promise.all([
-          booksAPI.getAll(),
+          booksAPI.getAll({ enabled_only: true }),
           stockAPI.getAll({ type: "SCHOOL", userId: "16010100108" }),
         ]);
 

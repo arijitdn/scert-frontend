@@ -48,6 +48,7 @@ export const booksAPI = {
     subject?: string;
     category?: string;
     academic_year?: string;
+    enabled_only?: boolean;
   }) => api.get("/books", { params }),
   getById: (id: string) => api.get(`/books/${id}`),
   create: (book: {
@@ -70,6 +71,7 @@ export const booksAPI = {
     },
   ) => api.put(`/books/${id}`, book),
   delete: (id: string) => api.delete(`/books/${id}`),
+  toggleStatus: (id: string) => api.patch(`/books/${id}/toggle-status`),
   search: (query: string) =>
     api.get(`/books/search?q=${encodeURIComponent(query)}`),
 };

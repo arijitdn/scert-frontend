@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useEffect, useState } from "react";
-import { Trash2, Edit2, Loader2 } from "lucide-react";
+import { Trash2, Edit2, Loader2, Power } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -41,6 +41,7 @@ interface Book {
   category: string;
   rate: number;
   academic_year: string;
+  is_enabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -170,6 +171,30 @@ export default function RegistrationOfBooks() {
       rate: book.rate.toString(),
       academic_year: book.academic_year,
     });
+  };
+
+  const handleToggleStatus = async (idx: number) => {
+    const book = books[idx];
+    const action = book.is_enabled ? "disable" : "enable";
+
+    if (window.confirm(`Are you sure you want to ${action} "${book.title}"?`)) {
+      try {
+        const response = await booksAPI.toggleStatus(book.id);
+        if (response.data.success) {
+          // Update the local state
+          setBooks(
+            books.map((b, i) =>
+              i === idx ? { ...b, is_enabled: !b.is_enabled } : b,
+            ),
+          );
+        } else {
+          alert(`Failed to ${action} book`);
+        }
+      } catch (err) {
+        console.error(`Error ${action}ing book:`, err);
+        alert(`Failed to ${action} book`);
+      }
+    }
   };
 
   // Filtering logic
@@ -391,7 +416,7 @@ export default function RegistrationOfBooks() {
                 <TableHead className="py-2 px-4 border-b">Category</TableHead>
                 <TableHead className="py-2 px-4 border-b">Title</TableHead>
                 <TableHead className="py-2 px-4 border-b">Rate</TableHead>
-
+                <TableHead className="py-2 px-4 border-b">Status</TableHead>
                 <TableHead className="py-2 px-4 border-b">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -416,7 +441,17 @@ export default function RegistrationOfBooks() {
                   <TableCell className="py-2 px-4 border-b">
                     ₹{book.rate}
                   </TableCell>
-
+                  <TableCell className="py-2 px-4 border-b">
+                    <span
+                      className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        book.is_enabled
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {book.is_enabled ? "Enabled" : "Disabled"}
+                    </span>
+                  </TableCell>
                   <TableCell className="py-2 px-4 border-b">
                     <div className="flex gap-2">
                       <Button
@@ -425,6 +460,18 @@ export default function RegistrationOfBooks() {
                         onClick={() => handleEdit(idx)}
                       >
                         <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={book.is_enabled ? "secondary" : "default"}
+                        onClick={() => handleToggleStatus(idx)}
+                        className={
+                          book.is_enabled
+                            ? "bg-orange-100 hover:bg-orange-200 text-orange-800"
+                            : "bg-green-100 hover:bg-green-200 text-green-800"
+                        }
+                      >
+                        <Power className="h-4 w-4" />
                       </Button>
                       <Button
                         size="sm"
