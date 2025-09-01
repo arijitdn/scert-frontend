@@ -10,7 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useState, useEffect } from "react";
 import { booksAPI, stockAPI, requisitionsAPI, schoolsAPI } from "@/lib/api";
-import type { School, StockWithBook, Requisition } from "@/types/database";
+import type {
+  School,
+  StockWithBook,
+  Requisition,
+  ClassEnrollment,
+} from "@/types/database";
 
 // Types
 interface Book {
@@ -29,18 +34,19 @@ export default function SchoolRequisition() {
   // Step-wise selection states
   const [classes, setClasses] = useState<string[]>([]);
   const [subjects, setSubjects] = useState<string[]>([]);
-  const [categories, setCategories] = useState<string[]>([]);
   const [books, setBooks] = useState<Book[]>([]);
 
   // Selection states
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedSubject, setSelectedSubject] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
   const [selectedBook, setSelectedBook] = useState("");
   const [quantity, setQuantity] = useState("");
 
   // Data states
   const [school, setSchool] = useState<School | null>(null);
+  const [classEnrollments, setClassEnrollments] = useState<ClassEnrollment[]>(
+    [],
+  );
   const [schoolStock, setSchoolStock] = useState<StockWithBook[]>([]);
   const [currentRequisitions, setCurrentRequisitions] = useState<
     Array<{
@@ -102,6 +108,13 @@ export default function SchoolRequisition() {
       const requisitions: Requisition[] = requisitionsResponse.data.data;
       console.log("Loaded requisitions in initial load:", requisitions);
       setPastRequisitions(requisitions);
+
+      // Load class enrollments for the school
+      const enrollmentsResponse = await schoolsAPI.getClassEnrollments(
+        schoolData.id,
+      );
+      const enrollments: ClassEnrollment[] = enrollmentsResponse.data.data;
+      setClassEnrollments(enrollments);
     } catch (error) {
       console.error("Error loading initial data:", error);
     } finally {
@@ -128,8 +141,6 @@ export default function SchoolRequisition() {
       ];
       setSubjects(uniqueSubjects);
       setSelectedSubject("");
-      setCategories([]);
-      setSelectedCategory("");
       setBooks([]);
       setSelectedBook("");
     } catch (error) {
@@ -137,51 +148,21 @@ export default function SchoolRequisition() {
     }
   };
 
-  // Load categories when subject is selected
+  // Load books when subject is selected
   useEffect(() => {
     if (selectedClass && selectedSubject) {
-      loadCategories();
-    } else {
-      setCategories([]);
-      setSelectedCategory("");
-    }
-  }, [selectedClass, selectedSubject]);
-
-  const loadCategories = async () => {
-    try {
-      const booksResponse = await booksAPI.getAll({
-        class: selectedClass,
-        subject: selectedSubject,
-      });
-      const classSubjectBooks: Book[] = booksResponse.data.data;
-      const uniqueCategories = [
-        ...new Set(classSubjectBooks.map((book) => book.category)),
-      ];
-      setCategories(uniqueCategories);
-      setSelectedCategory("");
-      setBooks([]);
-      setSelectedBook("");
-    } catch (error) {
-      console.error("Error loading categories:", error);
-    }
-  };
-
-  // Load books when category is selected
-  useEffect(() => {
-    if (selectedClass && selectedSubject && selectedCategory) {
       loadBooks();
     } else {
       setBooks([]);
       setSelectedBook("");
     }
-  }, [selectedClass, selectedSubject, selectedCategory]);
+  }, [selectedClass, selectedSubject]);
 
   const loadBooks = async () => {
     try {
       const booksResponse = await booksAPI.getAll({
         class: selectedClass,
         subject: selectedSubject,
-        category: selectedCategory,
       });
       const filteredBooks: Book[] = booksResponse.data.data;
       setBooks(filteredBooks);
@@ -200,6 +181,15 @@ export default function SchoolRequisition() {
     return stockItem?.quantity || 0;
   };
 
+  // Get student count for selected class
+  const getClassStudentCount = () => {
+    if (!selectedClass) return 0;
+    const classEnrollment = classEnrollments.find(
+      (e) => e.class === selectedClass,
+    );
+    return classEnrollment?.students || 0;
+  };
+
   // Add to current requisition
   const handleAddRequisition = (e: React.FormEvent) => {
     e.preventDefault();
@@ -209,13 +199,29 @@ export default function SchoolRequisition() {
     const book = books.find((b) => b.id === selectedBook);
     if (!book) return;
 
+    const parsedQuantity = parseInt(quantity);
+
+    // Get student count for the selected class
+    const classEnrollment = classEnrollments.find(
+      (e) => e.class === selectedClass,
+    );
+    const maxStudents = classEnrollment?.students || 0;
+
+    // Validate quantity is within valid range
+    if (parsedQuantity <= 0 || parsedQuantity > maxStudents) {
+      alert(
+        `Quantity must be between 1 and ${maxStudents} (number of students in ${selectedClass})`,
+      );
+      return;
+    }
+
     const newItem = {
       bookId: selectedBook,
       bookName: book.title,
       className: selectedClass,
       subject: selectedSubject,
-      category: selectedCategory,
-      quantity: parseInt(quantity),
+      category: book.category,
+      quantity: parsedQuantity,
     };
 
     setCurrentRequisitions((prev) => [...prev, newItem]);
@@ -223,7 +229,6 @@ export default function SchoolRequisition() {
     // Reset form
     setSelectedClass("");
     setSelectedSubject("");
-    setSelectedCategory("");
     setSelectedBook("");
     setQuantity("");
   };
@@ -436,27 +441,6 @@ export default function SchoolRequisition() {
                 </select>
               </div>
 
-              {/* Category Selection */}
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Category
-                </label>
-                <select
-                  className="w-full border rounded px-3 py-2 bg-background"
-                  value={selectedCategory}
-                  onChange={(e) => setSelectedCategory(e.target.value)}
-                  required
-                  disabled={!selectedSubject}
-                >
-                  <option value="">Select Category</option>
-                  {categories.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
               {/* Book Selection */}
               <div>
                 <label className="block text-sm font-medium mb-1">Book</label>
@@ -465,7 +449,7 @@ export default function SchoolRequisition() {
                   value={selectedBook}
                   onChange={(e) => setSelectedBook(e.target.value)}
                   required
-                  disabled={!selectedCategory}
+                  disabled={!selectedSubject}
                 >
                   <option value="">Select Book</option>
                   {books.map((book) => (
@@ -476,6 +460,14 @@ export default function SchoolRequisition() {
                 </select>
               </div>
             </div>
+
+            {/* Show class student count */}
+            {selectedClass && (
+              <div className="text-sm text-gray-700 bg-green-50 p-3 rounded">
+                <strong>Students in {selectedClass}:</strong>{" "}
+                {getClassStudentCount()} students
+              </div>
+            )}
 
             {/* Show current stock for selected book */}
             {selectedBook && (
@@ -492,15 +484,30 @@ export default function SchoolRequisition() {
               <Input
                 type="number"
                 min={1}
+                max={getClassStudentCount()}
                 placeholder="Number of books needed"
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
                 required
                 disabled={!selectedBook}
               />
+              {selectedClass && getClassStudentCount() > 0 && (
+                <p className="text-xs text-gray-600 mt-1">
+                  Maximum: {getClassStudentCount()} (based on class enrollment)
+                </p>
+              )}
             </div>
 
-            <Button type="submit" disabled={!selectedBook} className="max-w-xs">
+            <Button
+              type="submit"
+              disabled={
+                !selectedBook ||
+                !quantity ||
+                parseInt(quantity) <= 0 ||
+                parseInt(quantity) > getClassStudentCount()
+              }
+              className="max-w-xs"
+            >
               Add to Requisition
             </Button>
           </form>
@@ -621,7 +628,9 @@ export default function SchoolRequisition() {
                               ? "bg-green-100 text-green-800"
                               : req.status === "APPROVED"
                                 ? "bg-blue-100 text-blue-800"
-                                : req.status === "REJECTED"
+                                : req.status === "REJECTED_BY_BLOCK" ||
+                                    req.status === "REJECTED_BY_DISTRICT" ||
+                                    req.status === "REJECTED_BY_STATE"
                                   ? "bg-red-100 text-red-800"
                                   : "bg-yellow-100 text-yellow-800"
                           }`}

@@ -28,6 +28,7 @@ interface EChallanBook {
   className: string;
   subject: string;
   bookName: string;
+  noOfBooks: number;
   noOfBoxes: number;
   noOfPackets: number;
   noOfLooseBoxes: number;
@@ -261,9 +262,9 @@ export default function DistrictReceived({
         bookId: book.bookId,
         class: book.className,
         subject: book.subject,
-        totalQuantity: book.totalQuantity,
+        totalQuantity: book.noOfBooks || 0,
         received: currentReceived,
-        left: book.totalQuantity - currentReceived,
+        left: (book.noOfBooks || 0) - currentReceived,
       });
     } else {
       setSelectedBook(null);

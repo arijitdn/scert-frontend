@@ -251,4 +251,17 @@ export const notificationsAPI = {
     api.delete(`/notifications/${id}`, { data }),
 };
 
+// Reports API
+export const reportsAPI = {
+  getDistrictWise: (params?: { district?: string }) =>
+    api.get("/reports/district-wise", { params }),
+  getISWise: (params?: { district?: string }) =>
+    api.get("/reports/is-wise", { params }),
+  getSummary: () => api.get("/reports/summary"),
+  getDetailedDistrictWise: (params?: { district?: string }) =>
+    api.get("/reports/detailed-district-wise", { params }),
+  getDetailedISWise: (params?: { district?: string }) =>
+    api.get("/reports/detailed-is-wise", { params }),
+};
+
 export default api;

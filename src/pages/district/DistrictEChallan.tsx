@@ -23,11 +23,15 @@ import {
   Building2,
   Plus,
   Trash2,
+  Download,
 } from "lucide-react";
 import { useRef } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { blocksAPI, requisitionsAPI, stockAPI, echallanAPI } from "@/lib/api";
+import html2pdf from "html2pdf.js";
 
 export default function DistrictEChallan() {
+  const { toast } = useToast();
   // Form selection states - District can only select IS (blocks)
   const [selectedDestination, setSelectedDestination] = useState("");
   const [selectedRequisition, setSelectedRequisition] = useState("");
@@ -136,44 +140,132 @@ export default function DistrictEChallan() {
     }
   };
 
-  const populateBooksFromRequisition = () => {
+  const populateBooksFromRequisition = async () => {
     const requisition = requisitions.find(
       (req) => req.reqId === selectedRequisition,
     );
     if (requisition) {
-      const bookRows = requisition.books.map((book) => ({
-        className: book.class,
-        subject: book.subject,
-        bookName: book.title,
-        bookId: book.id,
-        noOfBoxes: "0",
-        noOfPackets: "0",
-        noOfLooseBoxes: Math.max(0, book.quantity - book.received).toString(),
-        pendingQuantity: Math.max(0, book.quantity - book.received),
-      }));
-      setRows(bookRows);
+      try {
+        // Fetch current district stock
+        const districtStockResponse = await stockAPI.getAll({
+          type: "DISTRICT",
+          userId: "1601",
+        });
+        const districtStock = districtStockResponse.data.data || [];
+
+        const bookRows = requisition.books.map((book) => {
+          const stockItem = districtStock.find(
+            (stock) => stock.bookId === book.id,
+          );
+          const availableStock = stockItem ? stockItem.quantity : 0;
+
+          return {
+            className: book.class,
+            subject: book.subject,
+            bookName: book.title,
+            bookId: book.id,
+            originalPendingQuantity: Math.max(0, book.quantity - book.received),
+            pendingQuantity: Math.max(0, book.quantity - book.received),
+            availableStock: availableStock,
+            noOfBooks: "0",
+            noOfBoxes: "0",
+            noOfPackets: "0",
+            noOfLooseBoxes: "0",
+          };
+        });
+        setRows(bookRows);
+      } catch (error) {
+        console.error("Error fetching stock data:", error);
+        // Fallback without stock data
+        const bookRows = requisition.books.map((book) => ({
+          className: book.class,
+          subject: book.subject,
+          bookName: book.title,
+          bookId: book.id,
+          originalPendingQuantity: Math.max(0, book.quantity - book.received),
+          pendingQuantity: Math.max(0, book.quantity - book.received),
+          availableStock: 0,
+          noOfBooks: "0",
+          noOfBoxes: "0",
+          noOfPackets: "0",
+          noOfLooseBoxes: "0",
+        }));
+        setRows(bookRows);
+      }
     }
   };
 
   const generateChallanNumber = () => {
-    const currentDate = new Date();
-    const year = currentDate.getFullYear();
-    const month = String(currentDate.getMonth() + 1).padStart(2, "0");
-    const day = String(currentDate.getDate()).padStart(2, "0");
+    // Get requisition data to extract codes
+    const requisition = requisitions.find(
+      (req) => req.reqId === selectedRequisition,
+    );
+
+    if (!requisition) {
+      return;
+    }
+
+    // Extract district code - use first 4 digits of UDISE as district code
+    const districtCode =
+      requisition.school?.udise?.toString().substring(0, 4) || "DIST";
+    // Extract IS/Block code from school data
+    const isCode = requisition.school?.block_code?.toString() || "IS";
+    // Extract school UDISE
+    const schoolUdise = requisition.school?.udise?.toString() || "UDISE";
+
+    // Generate unique number
     const random = String(Math.floor(Math.random() * 1000)).padStart(3, "0");
 
-    const challanNumber = `DISTRICT/TEXTBOOK/${year}/${month}${day}/${random}`;
+    const challanNumber = `ECHALLAN/${schoolUdise}/${random}`;
     setChallanNo(challanNumber);
   };
 
   // Generate display ID for preview (will be replaced with actual ID from backend)
-  const generatedId = challanNo
-    ? `Preview: ${challanNo}`
-    : "Will be auto-generated";
+  const generatedId = challanNo ? `${challanNo}` : "Will be auto-generated";
 
   const handleRowChange = (idx, field, value) => {
-    setRows((rows) =>
-      rows.map((row, i) => (i === idx ? { ...row, [field]: value } : row)),
+    setRows((prevRows) =>
+      prevRows.map((row, i) => {
+        if (i === idx) {
+          let updatedRow = { ...row, [field]: value };
+
+          // Validate noOfBooks against pending quantity and stock when manually entered
+          if (field === "noOfBooks") {
+            const originalPending =
+              parseInt(updatedRow.originalPendingQuantity) || 0;
+            const availableStock = parseInt(updatedRow.availableStock) || 0;
+            const currentBooks = parseInt(value) || 0;
+            const maxAllowed = Math.min(originalPending, availableStock);
+
+            if (currentBooks > originalPending) {
+              // Show toast warning for pending quantity
+              toast({
+                title: "Exceeds Pending Quantity",
+                description: `Number of books (${currentBooks}) cannot exceed pending quantity (${originalPending})`,
+                variant: "destructive",
+              });
+              updatedRow.noOfBooks = maxAllowed.toString();
+            } else if (currentBooks > availableStock) {
+              // Show toast warning for stock
+              toast({
+                title: "Insufficient Stock",
+                description: `Number of books (${currentBooks}) cannot exceed available stock (${availableStock})`,
+                variant: "destructive",
+              });
+              updatedRow.noOfBooks = maxAllowed.toString();
+            }
+
+            // Update pending quantity
+            updatedRow.pendingQuantity = Math.max(
+              0,
+              originalPending - (parseInt(updatedRow.noOfBooks) || 0),
+            );
+          }
+
+          return updatedRow;
+        }
+        return row;
+      }),
     );
   };
 
@@ -188,7 +280,10 @@ export default function DistrictEChallan() {
         noOfBoxes: "",
         noOfPackets: "",
         noOfLooseBoxes: "",
+        noOfBooks: "",
+        originalPendingQuantity: "0",
         pendingQuantity: 0,
+        availableStock: 0,
       },
     ]);
   };
@@ -208,11 +303,8 @@ export default function DistrictEChallan() {
 
       // Update stock by reducing the quantities for each book
       for (const row of rows) {
-        if (row.bookId && row.pendingQuantity > 0) {
-          const totalSupplied =
-            parseInt(row.noOfBoxes || "0") +
-            parseInt(row.noOfPackets || "0") +
-            parseInt(row.noOfLooseBoxes || "0");
+        if (row.bookId && row.noOfBooks && parseInt(row.noOfBooks) > 0) {
+          const totalSupplied = parseInt(row.noOfBooks);
 
           if (totalSupplied > 0) {
             // Find the corresponding stock item for this book
@@ -230,13 +322,22 @@ export default function DistrictEChallan() {
               );
             } else {
               console.warn(`Insufficient stock for book ${row.bookName}`);
+              toast({
+                title: "Warning",
+                description: `Insufficient stock for book ${row.bookName}`,
+                variant: "destructive",
+              });
             }
           }
         }
       }
     } catch (error) {
       console.error("Error updating stock:", error);
-      alert("Error updating stock. Please try again.");
+      toast({
+        title: "Error",
+        description: "Error updating stock. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -250,82 +351,219 @@ export default function DistrictEChallan() {
   });
 
   const handlePrint = async () => {
+    console.log("handlePrint called - generating PDF");
+    console.log("rows:", rows);
+    console.log("challanNo:", challanNo);
+    console.log("selectedDestination:", selectedDestination);
+
     // Validate that all quantities are filled
     const hasEmptyQuantities = rows.some((row) => {
-      const totalQty =
-        parseInt(row.noOfBoxes || "0") +
-        parseInt(row.noOfPackets || "0") +
-        parseInt(row.noOfLooseBoxes || "0");
+      const totalQty = parseInt(row.noOfBooks || "0");
       return totalQty === 0;
     });
 
     if (hasEmptyQuantities) {
-      alert(
-        "Please fill in quantities for all books before generating the challan.",
-      );
+      toast({
+        title: "Validation Error",
+        description:
+          "Please fill in 'No. of Books' for all books before generating the challan.",
+        variant: "destructive",
+      });
       return;
     }
 
-    // Confirm before updating stock
-    const confirmed = window.confirm(
-      "This will generate the e-challan and update the stock quantities. Are you sure you want to continue?",
-    );
-
-    if (!confirmed) return;
-
+    // Generate PDF directly for testing - simplified approach
     try {
-      setLoading(true);
+      console.log("Starting simplified PDF generation...");
 
-      // Create the e-challan in database
-      const echallanData = {
-        challanNo,
-        destinationType: "IS",
-        destinationName: selectedDestination,
-        destinationId: blocks.find((b) => b.name === selectedDestination)?.id,
-        requisitionId: selectedRequisition,
-        academicYear,
-        vehicleNo: vehicle,
-        agency,
-        books: rows.map((row) => ({
-          bookId: row.bookId,
-          className: row.className,
-          subject: row.subject,
-          bookName: row.bookName,
-          noOfBoxes: row.noOfBoxes || "0",
-          noOfPackets: row.noOfPackets || "0",
-          noOfLooseBoxes: row.noOfLooseBoxes || "0",
-        })),
+      // Simple HTML content without complex styles
+      const htmlContent = `
+        <div style="font-family: Arial; padding: 20px; color: black;">
+          <h1>SCERT ODISHA</h1>
+          <h2>DISTRICT LEVEL E-CHALLAN</h2>
+          <p><strong>Challan No:</strong> ${challanNo}</p>
+          <p><strong>Destination IS:</strong> ${selectedDestination}</p>
+          <p><strong>Academic Year:</strong> ${academicYear}</p>
+          <p><strong>Date:</strong> ${new Date().toLocaleDateString()}</p>
+          <p><strong>Vehicle No:</strong> ${vehicle || "N/A"}</p>
+          <p><strong>Agency:</strong> ${agency || "N/A"}</p>
+          
+          <table border="1" style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <th>Class</th>
+              <th>Subject</th>
+              <th>Book Name</th>
+              <th>No. of Books</th>
+              <th>No. of Boxes</th>
+              <th>No. of Packets</th>
+              <th>No. of Loose Books</th>
+            </tr>
+            ${rows
+              .map(
+                (row) => `
+              <tr>
+                <td>${row.className}</td>
+                <td>${row.subject}</td>
+                <td>${row.bookName}</td>
+                <td style="text-align: center; font-weight: bold;">${row.noOfBooks || "0"}</td>
+                <td style="text-align: center;">${row.noOfBoxes || "0"}</td>
+                <td style="text-align: center;">${row.noOfPackets || "0"}</td>
+                <td style="text-align: center;">${row.noOfLooseBoxes || "0"}</td>
+              </tr>
+            `,
+              )
+              .join("")}
+          </table>
+          
+          <p><strong>Total Quantity in eChallan:</strong> ${rows.reduce((sum, row) => sum + parseInt(row.noOfBooks || "0"), 0)}</p>
+          
+          <br><br><br>
+          <div style="display: flex; justify-content: space-between;">
+            <div>____________________<br>District Officer Signature</div>
+            <div>____________________<br>IS Officer Signature</div>
+          </div>
+        </div>
+      `;
+
+      console.log("Creating element for PDF...");
+
+      // Create element without adding to DOM
+      const element = document.createElement("div");
+      element.innerHTML = htmlContent;
+
+      console.log("Starting html2pdf...");
+
+      const options = {
+        margin: 10,
+        filename: `district-echallan-test-${Date.now()}.pdf`,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          logging: true,
+        },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
       };
 
-      const response = await echallanAPI.create(echallanData);
+      await html2pdf().from(element).set(options).save();
 
-      if (response.data.success) {
-        // Update stock quantities
-        await updateStock();
+      console.log("PDF generation completed");
 
-        // Refresh previous e-challans list
-        await loadPreviousEChallans();
-
-        // Show success message
-        alert(
-          `E-challan generated successfully! Challan ID: ${response.data.data.challanId}`,
-        );
-
-        // Print the challan
-        window.print();
-
-        // Reset form after successful generation
-        setSelectedRequisition("");
-        setRows([]);
-        setChallanNo("");
-        setVehicle("");
-        setAgency("");
-      }
+      toast({
+        title: "Success",
+        description: "PDF generated successfully for testing!",
+      });
     } catch (error) {
-      console.error("Error generating challan:", error);
-      alert("Error generating challan. Please try again.");
-    } finally {
-      setLoading(false);
+      console.error("Error generating PDF:", error);
+      toast({
+        title: "Error",
+        description: "Error generating PDF. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const downloadChallanPDF = async (challan) => {
+    try {
+      // Create a temporary element with the challan data
+      const tempElement = document.createElement("div");
+      tempElement.innerHTML = `
+        <div style="padding: 20px; font-family: Arial, sans-serif;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #ff6600; margin-bottom: 10px;">SCERT ODISHA</h1>
+            <h2 style="color: #333; margin-bottom: 5px;">DISTRICT LEVEL E-CHALLAN</h2>
+            <p style="margin: 0; font-weight: bold;">Challan No: ${challan.challanId}</p>
+          </div>
+          
+          <div style="margin-bottom: 20px;">
+            <p><strong>Destination IS:</strong> ${challan.destinationName}</p>
+            <p><strong>Academic Year:</strong> ${challan.academicYear || "2024-25"}</p>
+            <p><strong>Date:</strong> ${new Date(challan.createdAt).toLocaleDateString()}</p>
+            <p><strong>Vehicle No:</strong> ${challan.vehicleNo || "N/A"}</p>
+            <p><strong>Agency:</strong> ${challan.agency || "N/A"}</p>
+          </div>
+          
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+            <thead>
+              <tr style="background-color: #f0f0f0;">
+                <th style="border: 1px solid #ddd; padding: 8px;">Class</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">Subject</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">Book Name</th>
+                <th style="border: 1px solid #ddd; padding: 8px; font-weight: bold;">No. of Books</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">No. of Boxes</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">No. of Packets</th>
+                <th style="border: 1px solid #ddd; padding: 8px;">No. of Loose Books</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${challan.books
+                .map(
+                  (book) => `
+                <tr>
+                  <td style="border: 1px solid #ddd; padding: 8px;">${book.className}</td>
+                  <td style="border: 1px solid #ddd; padding: 8px;">${book.subject}</td>
+                  <td style="border: 1px solid #ddd; padding: 8px;">${book.bookName}</td>
+                  <td style="border: 1px solid #ddd; padding: 8px; text-align: center; font-weight: bold;">${book.noOfBooks || "0"}</td>
+                  <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${book.noOfBoxes}</td>
+                  <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${book.noOfPackets}</td>
+                  <td style="border: 1px solid #ddd; padding: 8px; text-align: center;">${book.noOfLooseBoxes}</td>
+                </tr>
+              `,
+                )
+                .join("")}
+            </tbody>
+          </table>
+          
+          <div style="margin-top: 40px;">
+            <p><strong>Total Quantity in eChallan:</strong> ${challan.books.reduce((sum, book) => sum + parseInt(book.noOfBooks || "0"), 0)}</p>
+          </div>
+          
+          <div style="margin-top: 60px; display: flex; justify-content: space-between;">
+            <div>
+              <p style="border-top: 1px solid #000; padding-top: 5px; margin-top: 40px;">District Officer Signature</p>
+            </div>
+            <div>
+              <p style="border-top: 1px solid #000; padding-top: 5px; margin-top: 40px;">IS Officer Signature</p>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Set up the element for PDF generation
+      tempElement.style.position = "absolute";
+      tempElement.style.left = "-9999px";
+      tempElement.style.top = "0";
+      tempElement.style.backgroundColor = "white";
+      tempElement.style.width = "210mm";
+      tempElement.style.minHeight = "297mm";
+      document.body.appendChild(tempElement);
+
+      // Wait a moment for the element to be rendered
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const opt = {
+        margin: 0.5,
+        filename: `district-echallan-${challan.challanId.replace(/[^a-zA-Z0-9]/g, "_")}.pdf`,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+        },
+        jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
+      };
+
+      await html2pdf().from(tempElement).set(opt).save();
+
+      // Remove the temporary element
+      document.body.removeChild(tempElement);
+    } catch (error) {
+      console.error("Error downloading PDF:", error);
+      toast({
+        title: "Error",
+        description: "Failed to download PDF. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -355,8 +593,17 @@ export default function DistrictEChallan() {
               <li>Challan number will be auto-generated</li>
               <li>Fill in vehicle and agency details</li>
               <li>
-                Click "Generate & Download" to create the e-challan and update
-                stock
+                <strong>Enter quantity in "No. of Books" field only</strong> -
+                this is the primary field for calculations
+              </li>
+              <li>
+                <span className="text-red-700 font-semibold">Important:</span>{" "}
+                Quantity cannot exceed Available Stock or Pending Quantity
+              </li>
+              <li>
+                Click "Generate PDF & Download" to create the e-challan and
+                update stock (generation will be cancelled if stock is
+                insufficient)
               </li>
             </ol>
           </div>
@@ -553,6 +800,12 @@ export default function DistrictEChallan() {
                           <th className="border px-2 py-1">Subject</th>
                           <th className="border px-2 py-1">Book Name</th>
                           <th className="border px-2 py-1">Pending Qty</th>
+                          <th className="border px-2 py-1 bg-green-50">
+                            Available Stock
+                          </th>
+                          <th className="border px-2 py-1 bg-blue-50">
+                            No. of Books
+                          </th>
                           <th className="border px-2 py-1">No. of Boxes</th>
                           <th className="border px-2 py-1">No. of Packets</th>
                           <th className="border px-2 py-1">
@@ -576,6 +829,37 @@ export default function DistrictEChallan() {
                               <span className="font-semibold text-orange-600">
                                 {row.pendingQuantity || 0}
                               </span>
+                            </td>
+                            <td className="border px-2 py-1 text-center bg-green-50">
+                              <span
+                                className={`font-semibold ${
+                                  (row.availableStock || 0) > 0
+                                    ? "text-green-600"
+                                    : "text-red-600"
+                                }`}
+                              >
+                                {row.availableStock || 0}
+                              </span>
+                            </td>
+                            <td className="border px-2 py-1 bg-blue-50">
+                              <Input
+                                value={row.noOfBooks}
+                                onChange={(e) =>
+                                  handleRowChange(
+                                    idx,
+                                    "noOfBooks",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-20 font-semibold"
+                                type="number"
+                                min="0"
+                                max={Math.min(
+                                  row.pendingQuantity || 0,
+                                  row.availableStock || 0,
+                                )}
+                                placeholder="0"
+                              />
                             </td>
                             <td className="border px-2 py-1">
                               <Input
@@ -650,9 +934,6 @@ export default function DistrictEChallan() {
                   </div>
 
                   <div className="flex items-center gap-4 mt-4 print:mt-8">
-                    <span className="font-semibold text-primary print:text-black">
-                      eChallan ID:
-                    </span>
                     <span className="bg-primary/10 text-primary font-mono px-4 py-2 rounded border border-primary/20 text-lg print:bg-white print:text-black print:border-black">
                       {generatedId}
                     </span>
@@ -670,7 +951,7 @@ export default function DistrictEChallan() {
               onClick={handlePrint}
               disabled={!selectedRequisition || rows.length === 0 || loading}
             >
-              {loading ? "Loading..." : "Generate & Download"}
+              {loading ? "Loading..." : "Generate PDF & Download"}
             </Button>
           </div>
         </CardContent>
@@ -709,7 +990,7 @@ export default function DistrictEChallan() {
               >
                 <CardHeader>
                   <CardTitle className="text-base font-semibold text-primary">
-                    eChallan ID: {challan.challanId}
+                    {challan.challanId}
                   </CardTitle>
                   <CardDescription className="text-sm">
                     Destination: {challan.destinationName} (IS)
@@ -742,16 +1023,33 @@ export default function DistrictEChallan() {
                     <div>
                       Date: {new Date(challan.createdAt).toLocaleDateString()}
                     </div>
+                    <div>
+                      Total Quantity in eChallan:{" "}
+                      {challan.books.reduce(
+                        (sum, book) => sum + parseInt(book.noOfBooks || "0"),
+                        0,
+                      )}
+                    </div>
                     <div>Books: {challan.totalBooks} items</div>
                     <div>Vehicle: {challan.vehicleNo || "N/A"}</div>
                     <div>Agency: {challan.agency || "N/A"}</div>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 w-full"
+                    onClick={() => downloadChallanPDF(challan)}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download PDF
+                  </Button>
                 </CardContent>
               </Card>
             ))
           )}
         </div>
       </div>
+
       <style>{`
   @media print {
     body * { visibility: hidden !important; }
@@ -764,7 +1062,7 @@ export default function DistrictEChallan() {
       color: #000 !important;
     }
     .print\:hidden { display: none !important; }
-  }
+  }           
 `}</style>
     </AdminLayout>
   );

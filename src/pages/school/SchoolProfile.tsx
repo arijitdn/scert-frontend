@@ -63,7 +63,7 @@ export default function SchoolProfile() {
   const [tempPhone, setTempPhone] = useState(phone);
 
   const [editIdx, setEditIdx] = useState<number | null>(null);
-  const [editValue, setEditValue] = useState(0);
+  const [editValue, setEditValue] = useState<number | undefined>();
   const [addingClass, setAddingClass] = useState(false);
   const [newClassName, setNewClassName] = useState("");
   const [newClassCount, setNewClassCount] = useState<number>();
@@ -100,7 +100,7 @@ export default function SchoolProfile() {
   };
 
   const handleClassSave = async (idx: number) => {
-    if (!enrollments[idx]) return;
+    if (!enrollments[idx] || !editValue || editValue <= 0) return;
 
     setEnrollmentLoading(true);
     const success = await updateEnrollment(enrollments[idx].class, editValue);
@@ -115,14 +115,14 @@ export default function SchoolProfile() {
   };
 
   const handleAddClass = async () => {
-    if (!newClassName.trim() || newClassCount < 0) return;
+    if (!newClassName.trim() || !newClassCount || newClassCount <= 0) return;
 
     setEnrollmentLoading(true);
     const success = await updateEnrollment(newClassName.trim(), newClassCount);
     if (success) {
       setAddingClass(false);
       setNewClassName("");
-      setNewClassCount(0);
+      setNewClassCount(undefined);
     }
     setEnrollmentLoading(false);
   };
@@ -499,18 +499,22 @@ export default function SchoolProfile() {
                   <Input
                     type="number"
                     placeholder="Student count"
-                    value={newClassCount}
-                    onChange={(e) =>
-                      setNewClassCount(parseInt(e.target.value) || 0)
-                    }
-                    min="0"
+                    value={newClassCount ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNewClassCount(
+                        value === "" ? undefined : parseInt(value),
+                      );
+                    }}
+                    min="1"
                     className="w-32"
                   />
                   <Button
                     onClick={handleAddClass}
                     disabled={
                       !newClassName.trim() ||
-                      newClassCount < 0 ||
+                      !newClassCount ||
+                      newClassCount <= 0 ||
                       enrollmentLoading
                     }
                     size="sm"
@@ -521,7 +525,7 @@ export default function SchoolProfile() {
                     onClick={() => {
                       setAddingClass(false);
                       setNewClassName("");
-                      setNewClassCount(0);
+                      setNewClassCount(undefined);
                     }}
                     variant="outline"
                     size="sm"
@@ -576,12 +580,16 @@ export default function SchoolProfile() {
                             {editIdx === idx ? (
                               <Input
                                 type="number"
-                                value={editValue}
-                                onChange={(e) =>
-                                  setEditValue(parseInt(e.target.value) || 0)
-                                }
-                                min="0"
+                                value={editValue ?? ""}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setEditValue(
+                                    value === "" ? undefined : parseInt(value),
+                                  );
+                                }}
+                                min="1"
                                 className="w-24"
+                                placeholder="Students"
                               />
                             ) : (
                               <span className="text-blue-600 font-semibold">
@@ -595,7 +603,11 @@ export default function SchoolProfile() {
                                 <Button
                                   onClick={() => handleClassSave(idx)}
                                   size="sm"
-                                  disabled={enrollmentLoading}
+                                  disabled={
+                                    enrollmentLoading ||
+                                    !editValue ||
+                                    editValue <= 0
+                                  }
                                 >
                                   {enrollmentLoading ? (
                                     <Loader2 className="h-3 w-3 animate-spin" />

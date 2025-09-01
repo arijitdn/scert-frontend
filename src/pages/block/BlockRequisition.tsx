@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle, XCircle, Clock, AlertCircle } from "lucide-react";
+import { CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { useState, useEffect } from "react";
 import { requisitionsAPI, schoolsAPI } from "@/lib/api";
 import type { Requisition, School } from "@/types/database";
@@ -135,9 +135,6 @@ export default function BlockRequisition() {
   const pendingRequisitions = requisitions.filter(
     (req) => req.status === "PENDING_BLOCK_APPROVAL",
   );
-  const rejectedRequisitions = requisitions.filter(
-    (req) => req.status === "REJECTED_BY_BLOCK",
-  );
   const approvedRequisitions = requisitions.filter(
     (req) => req.status === "PENDING_DISTRICT_APPROVAL",
   );
@@ -155,20 +152,14 @@ export default function BlockRequisition() {
     );
   };
 
-  // Handle status update with proper status values
-  const handleStatusUpdate = async (
-    requisitionId: string,
-    action: "approve" | "reject",
-  ) => {
+  // Handle sending remarks
+  const handleSendRemark = async (requisitionId: string) => {
     try {
-      // Validate that remarks are provided when approving
-      if (
-        action === "approve" &&
-        (!remarks[requisitionId] || remarks[requisitionId].trim() === "")
-      ) {
+      // Validate that remarks are provided
+      if (!remarks[requisitionId] || remarks[requisitionId].trim() === "") {
         toast({
           title: "Validation Error",
-          description: "Please add remarks before approving the requisition.",
+          description: "Please add remarks before sending.",
           variant: "destructive",
         });
         return;
@@ -181,28 +172,24 @@ export default function BlockRequisition() {
         throw new Error("Requisition not found");
       }
 
-      const newStatus =
-        action === "approve"
-          ? "PENDING_DISTRICT_APPROVAL"
-          : "REJECTED_BY_BLOCK";
-
+      // Update both remarks and status to approve by block
       await requisitionsAPI.update(requisitionId, {
-        status: newStatus,
-        remarksByBlock: remarks[requisitionId] || "",
+        remarksByBlock: remarks[requisitionId].trim(),
+        status: "PENDING_DISTRICT_APPROVAL",
       });
 
       toast({
         title: "Success",
-        description: `Requisition ${action === "approve" ? "approved" : "rejected"} successfully`,
+        description: "Requisition remarked by block successfully",
       });
 
       // Reload requisitions to get updated data
       await loadRequisitions();
     } catch (error) {
-      console.error("Error updating requisition:", error);
+      console.error("Error sending remarks:", error);
       toast({
         title: "Error",
-        description: "Error updating requisition. Please try again.",
+        description: "Error sending remarks. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -213,31 +200,6 @@ export default function BlockRequisition() {
   // Handle remark change
   const handleRemarkChange = (requisitionId: string, value: string) => {
     setRemarks((prev) => ({ ...prev, [requisitionId]: value }));
-  };
-
-  // Save remark without changing status
-  const handleSaveRemark = async (requisitionId: string) => {
-    try {
-      setUpdating((prev) => ({ ...prev, [requisitionId]: true }));
-
-      await requisitionsAPI.update(requisitionId, {
-        remarksByBlock: remarks[requisitionId] || "",
-      });
-
-      toast({
-        title: "Success",
-        description: "Remark saved successfully!",
-      });
-    } catch (error) {
-      console.error("Error saving remark:", error);
-      toast({
-        title: "Error",
-        description: "Error saving remark. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setUpdating((prev) => ({ ...prev, [requisitionId]: false }));
-    }
   };
 
   // Render requisition card
@@ -261,11 +223,9 @@ export default function BlockRequisition() {
             variant={
               req.status === "PENDING_DISTRICT_APPROVAL"
                 ? "default"
-                : req.status === "REJECTED_BY_BLOCK"
-                  ? "destructive"
-                  : req.status === "COMPLETED"
-                    ? "default"
-                    : "secondary"
+                : req.status === "COMPLETED"
+                  ? "default"
+                  : "secondary"
             }
           >
             {req.status === "PENDING_BLOCK_APPROVAL" && (
@@ -277,13 +237,7 @@ export default function BlockRequisition() {
             {req.status === "PENDING_DISTRICT_APPROVAL" && (
               <>
                 <CheckCircle className="w-3 h-3 mr-1" />
-                Approved by Block
-              </>
-            )}
-            {req.status === "REJECTED_BY_BLOCK" && (
-              <>
-                <XCircle className="w-3 h-3 mr-1" />
-                Rejected
+                Remarked by Block
               </>
             )}
             {req.status === "COMPLETED" && (
@@ -329,21 +283,22 @@ export default function BlockRequisition() {
               <span className="text-red-500">*</span>
             )}
           </label>
-          <Textarea
-            value={remarks[req.id] || req.remarksByBlock || ""}
-            onChange={(e) => handleRemarkChange(req.id, e.target.value)}
-            placeholder="Add remarks for this requisition... (Required for approval)"
-            className="mb-2"
-            disabled={updating[req.id]}
-          />
-          <Button
-            onClick={() => handleSaveRemark(req.id)}
-            variant="outline"
-            size="sm"
-            disabled={updating[req.id]}
-          >
-            Save Remark
-          </Button>
+
+          {req.status === "PENDING_BLOCK_APPROVAL" ? (
+            <Textarea
+              value={remarks[req.id] || req.remarksByBlock || ""}
+              onChange={(e) => handleRemarkChange(req.id, e.target.value)}
+              placeholder="Add remarks for this requisition... (Required for approval)"
+              className="mb-2"
+              disabled={updating[req.id]}
+            />
+          ) : (
+            <div className="p-3 bg-gray-50 rounded border">
+              <p className="text-gray-700">
+                {req.remarksByBlock || "No remarks provided"}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Show existing district remarks if any */}
@@ -359,50 +314,17 @@ export default function BlockRequisition() {
         {/* Action Buttons */}
         <div className="flex gap-2 flex-wrap">
           {req.status === "PENDING_BLOCK_APPROVAL" && (
-            <>
-              <Button
-                onClick={() => handleStatusUpdate(req.id, "approve")}
-                disabled={updating[req.id]}
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {updating[req.id] ? (
-                  "Updating..."
-                ) : (
-                  <>
-                    <CheckCircle className="w-4 h-4 mr-1" />
-                    Approve
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={() => handleStatusUpdate(req.id, "reject")}
-                disabled={updating[req.id]}
-                variant="destructive"
-              >
-                {updating[req.id] ? (
-                  "Updating..."
-                ) : (
-                  <>
-                    <XCircle className="w-4 h-4 mr-1" />
-                    Reject
-                  </>
-                )}
-              </Button>
-            </>
-          )}
-
-          {req.status === "REJECTED_BY_BLOCK" && (
             <Button
-              onClick={() => handleStatusUpdate(req.id, "approve")}
+              onClick={() => handleSendRemark(req.id)}
               disabled={updating[req.id]}
               className="bg-green-600 hover:bg-green-700"
             >
               {updating[req.id] ? (
-                "Updating..."
+                "Sending..."
               ) : (
                 <>
                   <CheckCircle className="w-4 h-4 mr-1" />
-                  Re-approve
+                  Send Remark
                 </>
               )}
             </Button>
@@ -440,7 +362,7 @@ export default function BlockRequisition() {
       adminLevel="BLOCK ADMIN"
     >
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="pending" className="flex items-center gap-2">
             <Clock className="w-4 h-4" />
             Pending ({pendingRequisitions.length})
@@ -448,10 +370,6 @@ export default function BlockRequisition() {
           <TabsTrigger value="approved" className="flex items-center gap-2">
             <CheckCircle className="w-4 h-4" />
             Approved ({approvedRequisitions.length})
-          </TabsTrigger>
-          <TabsTrigger value="rejected" className="flex items-center gap-2">
-            <XCircle className="w-4 h-4" />
-            Rejected ({rejectedRequisitions.length})
           </TabsTrigger>
         </TabsList>
 
@@ -528,50 +446,6 @@ export default function BlockRequisition() {
                       </CardTitle>
                       <CardDescription>
                         {schoolRequisitions.length} approved requisition(s) •
-                        UDISE: {getSchoolUdise(firstRequisition)}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        {schoolRequisitions.map(renderRequisitionCard)}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="rejected" className="mt-6">
-          {rejectedRequisitions.length === 0 ? (
-            <Card className="w-full max-w-4xl mx-auto">
-              <CardContent className="text-center py-8">
-                <XCircle className="w-12 h-12 mx-auto text-gray-400 mb-4" />
-                <p className="text-gray-500">
-                  No rejected requisitions found for your block.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-6">
-              {Object.entries(
-                groupRequisitionsBySchool(rejectedRequisitions),
-              ).map(([schoolId, schoolRequisitions]) => {
-                // Get the first requisition to extract school information
-                const firstRequisition = schoolRequisitions[0];
-                return (
-                  <Card
-                    key={schoolId}
-                    className="w-full max-w-6xl mx-auto bg-gradient-to-br from-red-50 to-pink-50 border-red-200"
-                  >
-                    <CardHeader>
-                      <CardTitle className="text-lg text-red-900 flex items-center gap-2">
-                        <XCircle className="w-5 h-5" />
-                        {getSchoolName(firstRequisition)}
-                      </CardTitle>
-                      <CardDescription>
-                        {schoolRequisitions.length} rejected requisition(s) •
                         UDISE: {getSchoolUdise(firstRequisition)}
                       </CardDescription>
                     </CardHeader>
