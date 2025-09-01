@@ -2,8 +2,16 @@ import AdminLayout from "@/components/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { useEffect, useState } from "react";
-import { Trash2, Edit2, Loader2, Power } from "lucide-react";
+import { Trash2, Edit2, Loader2, Power, MessageSquare } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -42,6 +50,7 @@ interface Book {
   rate: number;
   academic_year: string;
   is_enabled: boolean;
+  comment: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -56,6 +65,9 @@ export default function RegistrationOfBooks() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [commentModalOpen, setCommentModalOpen] = useState(false);
+  const [commentBookIndex, setCommentBookIndex] = useState(-1);
+  const [commentText, setCommentText] = useState("");
 
   async function fetchData() {
     try {
@@ -194,6 +206,40 @@ export default function RegistrationOfBooks() {
         console.error(`Error ${action}ing book:`, err);
         alert(`Failed to ${action} book`);
       }
+    }
+  };
+
+  const handleOpenCommentModal = (idx: number) => {
+    setCommentBookIndex(idx);
+    setCommentText("");
+    setCommentModalOpen(true);
+  };
+
+  const handleAddComment = async () => {
+    if (!commentText.trim()) {
+      alert("Please enter a comment");
+      return;
+    }
+
+    const book = books[commentBookIndex];
+    try {
+      const response = await booksAPI.addComment(book.id, commentText.trim());
+      if (response.data.success) {
+        // Update the local state
+        setBooks(
+          books.map((b, i) =>
+            i === commentBookIndex ? { ...b, comment: commentText.trim() } : b,
+          ),
+        );
+        setCommentModalOpen(false);
+        setCommentText("");
+        setCommentBookIndex(-1);
+      } else {
+        alert(response.data.error || "Failed to add comment");
+      }
+    } catch (err: any) {
+      console.error("Error adding comment:", err);
+      alert(err.response?.data?.error || "Failed to add comment");
     }
   };
 
@@ -417,6 +463,7 @@ export default function RegistrationOfBooks() {
                 <TableHead className="py-2 px-4 border-b">Title</TableHead>
                 <TableHead className="py-2 px-4 border-b">Rate</TableHead>
                 <TableHead className="py-2 px-4 border-b">Status</TableHead>
+                <TableHead className="py-2 px-4 border-b">Comment</TableHead>
                 <TableHead className="py-2 px-4 border-b">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -452,6 +499,18 @@ export default function RegistrationOfBooks() {
                       {book.is_enabled ? "Enabled" : "Disabled"}
                     </span>
                   </TableCell>
+                  <TableCell className="py-2 px-4 border-b max-w-xs">
+                    {book.comment ? (
+                      <div
+                        className="text-sm text-gray-700 truncate"
+                        title={book.comment}
+                      >
+                        {book.comment}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400 text-sm">No comment</span>
+                    )}
+                  </TableCell>
                   <TableCell className="py-2 px-4 border-b">
                     <div className="flex gap-2">
                       <Button
@@ -473,6 +532,16 @@ export default function RegistrationOfBooks() {
                       >
                         <Power className="h-4 w-4" />
                       </Button>
+                      {!book.comment && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenCommentModal(idx)}
+                          className="bg-blue-100 hover:bg-blue-200 text-blue-800"
+                        >
+                          <MessageSquare className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="destructive"
@@ -488,6 +557,47 @@ export default function RegistrationOfBooks() {
           </Table>
         </div>
       </div>
+
+      {/* Comment Modal */}
+      <Dialog open={commentModalOpen} onOpenChange={setCommentModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Comment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-600 mb-2">
+                Book:{" "}
+                {commentBookIndex >= 0 ? books[commentBookIndex]?.title : ""}
+              </p>
+              <Textarea
+                placeholder="Enter your comment..."
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                rows={4}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Note: Comments can only be added once and cannot be edited or
+                deleted.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setCommentModalOpen(false);
+                setCommentText("");
+                setCommentBookIndex(-1);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleAddComment}>Add Comment</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }

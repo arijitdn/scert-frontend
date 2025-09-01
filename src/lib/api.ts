@@ -72,6 +72,8 @@ export const booksAPI = {
   ) => api.put(`/books/${id}`, book),
   delete: (id: string) => api.delete(`/books/${id}`),
   toggleStatus: (id: string) => api.patch(`/books/${id}/toggle-status`),
+  addComment: (id: string, comment: string) =>
+    api.patch(`/books/${id}/add-comment`, { comment }),
   search: (query: string) =>
     api.get(`/books/search?q=${encodeURIComponent(query)}`),
 };
